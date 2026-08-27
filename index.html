@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0c0c0d" />
+  <meta name="description" content="OBJETIVOS — sistema operacional pessoal com agenda inteligente, metas, finanças e áreas de desenvolvimento." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>OBJETIVOS — Spatial OS</title>
+</head>
+<body>
+  <div id="environment" aria-hidden="true">
+    <div class="environment-light environment-light-a"></div>
+    <div class="environment-light environment-light-b"></div>
+    <div class="environment-grid"></div>
+    <div class="environment-floor"></div>
+  </div>
+
+  <div class="app-shell" id="appShell">
+    <aside class="spatial-rail glass depth-3" aria-label="Navegação principal">
+      <button class="brand-mark" data-view="today" aria-label="OBJETIVOS"><span class="brand-orbit"></span></button>
+      <nav id="railNav"></nav>
+      <button class="rail-btn" id="settingsBtn" title="Configurações">⚙</button>
+    </aside>
+
+    <header class="top-ornament glass depth-4">
+      <div class="brand-title"><strong>OBJETIVOS</strong><span>Spatial OS</span></div>
+      <button id="commandBtn" class="command-trigger"><span>⌘</span> Pergunte ou execute</button>
+      <div class="status-cluster"><span id="syncStatus">salvo localmente</span><span class="status-dot"></span></div>
+    </header>
+
+    <main id="viewRoot" class="primary-window glass depth-2" tabindex="-1"></main>
+
+    <section id="contextLayer" class="context-layer" aria-label="Painéis contextuais"></section>
+
+    <div id="spotifyWidget" class="spotify-widget glass depth-4">
+      <div class="spotify-icon">●</div>
+      <div class="spotify-copy"><strong>Spotify</strong><span id="spotifyStatus">não conectado</span></div>
+      <button id="spotifyToggle">Conectar</button>
+    </div>
+
+    <nav class="bottom-dock glass depth-5" id="bottomDock" aria-label="Navegação rápida"></nav>
+  </div>
+
+  <div id="modalLayer" class="modal-layer" aria-live="polite"></div>
+  <div id="toastLayer" class="toast-layer" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
