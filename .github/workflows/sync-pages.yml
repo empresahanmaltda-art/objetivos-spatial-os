@@ -25,7 +25,7 @@ jobs:
       - name: Update gh-pages
         shell: bash
         run: |
-          git fetch origin gh-pages
+          git fetch origin gh-pages:refs/remotes/origin/gh-pages
           expected_sha="$(git rev-parse refs/remotes/origin/gh-pages)"
           git push --force-with-lease="refs/heads/gh-pages:${expected_sha}" origin HEAD:gh-pages
 
