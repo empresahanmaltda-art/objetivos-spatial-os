@@ -1,0 +1,44 @@
+name: Sync GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: pages-source
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update gh-pages
+        shell: bash
+        run: |
+          git fetch origin gh-pages:refs/remotes/origin/gh-pages
+          expected_sha="$(git rev-parse refs/remotes/origin/gh-pages)"
+          git push --force-with-lease="refs/heads/gh-pages:${expected_sha}" origin HEAD:gh-pages
+
+      - name: Request Pages build
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.request("POST /repos/{owner}/{repo}/pages/builds", {
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              })
+            } catch (error) {
+              if (error.status !== 409) throw error
+              core.info("A Pages build is already queued.")
+            }
