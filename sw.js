@@ -1,5 +1,5 @@
-const CACHE = 'objetivos-spatial-v3';
-const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './assets/icon.svg'];
+const CACHE = 'objetivos-spatial-v4';
+const ASSETS = ['./', './index.html', './styles.css?v=4', './app.js?v=4', './manifest.webmanifest?v=4', './assets/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -30,5 +30,33 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => caches.match(event.request))
+  );
+});
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data?.json?.() || {}; } catch { data = { title: 'OBJETIVOS', body: event.data?.text?.() || 'Você tem uma tarefa agora.' }; }
+  const title = data.title || 'OBJETIVOS';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: data.body || 'Uma tarefa da sua rotina está começando.',
+    icon: './assets/icon.svg',
+    badge: './assets/icon.svg',
+    tag: data.tag || `objetivos-${Date.now()}`,
+    data: { url: data.url || './', ...(data.data || {}) }
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || './', self.location.href).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+      const existing = clients.find((client) => client.url.startsWith(self.location.origin));
+      if (existing) {
+        if ('navigate' in existing) await existing.navigate(target);
+        return existing.focus();
+      }
+      return self.clients.openWindow(target);
+    })
   );
 });
