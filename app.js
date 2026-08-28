@@ -434,6 +434,9 @@
     if (broadcast && channel && !suppressBroadcast) {
       channel.postMessage({ source: INSTANCE_ID, state });
     }
+    if (typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('objetivos:state-saved', { detail: { state: JSON.parse(JSON.stringify(state)) } }));
+    }
     requestAnimationFrame(() => setSaveStatus('salvo neste aparelho'));
   }
 
@@ -779,7 +782,9 @@
     const time = task.time || 'sem horário';
     return `
       <article class="task-card ${overdue ? 'overdue' : ''} ${completed ? 'completed' : ''}" data-task-id="${task.id}" data-task-date="${date}" data-swipe-left="${esc(state.settings.swipeLeft)}" data-swipe-right="${esc(state.settings.swipeRight)}">
-        <button class="task-check" data-action="toggleTask" data-id="${task.id}" data-date="${date}" type="button" aria-label="${completed ? 'Desfazer conclusão' : 'Concluir tarefa'}">${completed ? '✓' : '✓'}</button>
+        <button class="task-check" data-action="toggleTask" data-id="${task.id}" data-date="${date}" type="button" aria-label="${completed ? 'Desfazer conclusão' : 'Concluir tarefa'}">
+          ${completed ? '<svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4.3 10.4 8.1 14l7.6-8"/></svg>' : ''}
+        </button>
         <div class="task-copy">
           <div class="task-title">${esc(task.title)}</div>
           <div class="task-meta">
@@ -799,7 +804,10 @@
     if (!completed.length) return '';
     return `
       <section class="completed-drawer" id="completedDrawer">
-        <button class="completed-toggle" data-action="toggleCompletedDrawer" type="button">▸ ${completed.length} concluída${completed.length === 1 ? '' : 's'} — toque para ver</button>
+        <button class="completed-toggle" data-action="toggleCompletedDrawer" type="button" aria-expanded="false">
+          <span class="drawer-chevron" aria-hidden="true">›</span>
+          <span>${completed.length} concluída${completed.length === 1 ? '' : 's'} — toque para ver</span>
+        </button>
         <div class="completed-list">
           ${completed.map((task) => taskCard(task, date, { completed: true })).join('')}
         </div>
@@ -996,6 +1004,8 @@
     if (custom) custom.hidden = preset !== 'custom';
     const weekdayEditor = $('#repeatWeekdays');
     if (weekdayEditor) weekdayEditor.hidden = $('#repeatUnit')?.value !== 'week';
+    const details = $('#taskAdvanced');
+    if (details && preset === 'custom') details.open = true;
   }
 
   function applySmartTaskInput(data, form) {
@@ -1024,18 +1034,21 @@
     const repeat = task?.repeat || normalizeRepeat(task || {});
     const repeatPreset = repeatPresetFor(task);
     const reminder = task?.reminder ?? state.settings.defaultReminder;
+    const advancedOpen = Boolean(task?.goalId || task?.notes || repeatPreset === 'custom' || repeat?.mode === 'completed' || repeat?.endDate);
     openModal(`
       <div class="modal-head">
         <div><h2>${task ? 'Editar tarefa' : 'Nova tarefa'}</h2><p>Tudo é salvo automaticamente quando você confirma.</p></div>
         <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
       </div>
       <form id="taskForm">
-        <div class="input-grid">
-          <div class="field full"><label>Tarefa</label><input name="title" required maxlength="150" value="${esc(task?.title || '')}" placeholder="O que precisa ser feito?" /><small class="form-note">Entende: “estudar russo todo dia às 21:45 por 75 min”.</small></div>
-          <div class="field"><label>Data</label><input name="date" type="date" required value="${esc(date)}" /></div>
-          <div class="field"><label>Horário</label><input name="time" type="time" value="${esc(task?.time || '')}" /></div>
-          <div class="field"><label>Duração</label><input name="duration" type="number" min="5" step="5" value="${esc(task?.duration || state.settings.defaultDuration)}" /></div>
-          <div class="field"><label>Repetição</label><select name="repeatPreset" id="repeatPreset">
+        <div class="task-form-compact">
+          <div class="field task-title-field"><label>Tarefa</label><input name="title" required maxlength="150" value="${esc(task?.title || '')}" placeholder="O que precisa ser feito?" /><small class="form-note">Você também pode escrever: “russo todo dia às 21:45 por 75 min”.</small></div>
+          <div class="task-core-grid">
+            <div class="field task-date-field"><label>Data</label><input name="date" type="date" required value="${esc(date)}" /></div>
+            <div class="field"><label>Horário</label><input name="time" type="time" value="${esc(task?.time || '')}" /></div>
+          </div>
+          <div class="task-options-grid">
+            <div class="field"><label>Repetição</label><select name="repeatPreset" id="repeatPreset">
             <option value="none" ${repeatPreset === 'none' ? 'selected' : ''}>Não repetir</option>
             <option value="daily" ${repeatPreset === 'daily' ? 'selected' : ''}>Todo dia</option>
             <option value="weekdays" ${repeatPreset === 'weekdays' ? 'selected' : ''}>Segunda a sexta</option>
@@ -1043,8 +1056,8 @@
             <option value="monthly" ${repeatPreset === 'monthly' ? 'selected' : ''}>Todo mês</option>
             <option value="yearly" ${repeatPreset === 'yearly' ? 'selected' : ''}>Todo ano</option>
             <option value="custom" ${repeatPreset === 'custom' ? 'selected' : ''}>Personalizada…</option>
-          </select></div>
-          <div class="field"><label>Lembrete</label><select name="reminder">
+            </select></div>
+            <div class="field"><label>Lembrete</label><select name="reminder">
             <option value="" ${reminder == null ? 'selected' : ''}>Sem lembrete</option>
             <option value="0" ${Number(reminder) === 0 ? 'selected' : ''}>No horário</option>
             <option value="5" ${Number(reminder) === 5 ? 'selected' : ''}>5 min antes</option>
@@ -1052,32 +1065,39 @@
             <option value="15" ${Number(reminder) === 15 ? 'selected' : ''}>15 min antes</option>
             <option value="30" ${Number(reminder) === 30 ? 'selected' : ''}>30 min antes</option>
             <option value="60" ${Number(reminder) === 60 ? 'selected' : ''}>1 hora antes</option>
-          </select></div>
-          <div class="repeat-editor full" id="repeatAdvanced" ${repeatPreset === 'none' ? 'hidden' : ''}>
-            <div class="repeat-grid">
-              <div class="field"><label>Repetir pela</label><select name="repeatMode">
-                <option value="scheduled" ${repeat?.mode !== 'completed' ? 'selected' : ''}>Data programada</option>
-                <option value="completed" ${repeat?.mode === 'completed' ? 'selected' : ''}>Data da conclusão</option>
-              </select></div>
-              <div class="field"><label>Terminar em</label><input name="repeatEnd" type="date" value="${esc(repeat?.endDate || '')}" /></div>
-            </div>
-            <div class="repeat-custom" id="repeatCustom" ${repeatPreset !== 'custom' ? 'hidden' : ''}>
-              <div class="repeat-grid">
-                <div class="field"><label>A cada</label><input name="repeatInterval" type="number" min="1" max="365" value="${esc(repeat?.interval || 1)}" /></div>
-                <div class="field"><label>Unidade</label><select name="repeatUnit" id="repeatUnit">
-                  <option value="day" ${repeat?.type === 'day' ? 'selected' : ''}>dia(s)</option>
-                  <option value="week" ${repeat?.type === 'week' ? 'selected' : ''}>semana(s)</option>
-                  <option value="month" ${repeat?.type === 'month' ? 'selected' : ''}>mês(es)</option>
-                  <option value="year" ${repeat?.type === 'year' ? 'selected' : ''}>ano(s)</option>
-                </select></div>
-              </div>
-              <div class="weekday-picker" id="repeatWeekdays" ${repeat?.type !== 'week' ? 'hidden' : ''}>
-                ${weekdayNames.map((name, day) => `<label><input type="checkbox" name="repeatDays" value="${day}" ${repeat?.days?.includes(day) ? 'checked' : ''}/><span>${name}</span></label>`).join('')}
-              </div>
-            </div>
+            </select></div>
           </div>
-          <div class="field full"><label>Meta vinculada</label><select name="goalId"><option value="">Nenhuma</option>${state.goals.map((goal) => `<option value="${goal.id}" ${task?.goalId === goal.id ? 'selected' : ''}>${esc(goal.title)}</option>`).join('')}</select></div>
-          <div class="field full"><label>Observação</label><textarea name="notes" placeholder="Opcional">${esc(task?.notes || '')}</textarea></div>
+          <details class="task-advanced" id="taskAdvanced" ${advancedOpen ? 'open' : ''}>
+            <summary><span>Mais opções</span><small>duração, repetição avançada, meta e nota</small></summary>
+            <div class="task-advanced-content">
+              <div class="field"><label>Duração</label><div class="duration-input"><input name="duration" type="number" min="5" step="5" inputmode="numeric" value="${esc(task?.duration || state.settings.defaultDuration)}" /><span>min</span></div></div>
+              <div class="repeat-editor" id="repeatAdvanced" ${repeatPreset === 'none' ? 'hidden' : ''}>
+                <div class="repeat-grid">
+                  <div class="field"><label>Repetir pela</label><select name="repeatMode">
+                    <option value="scheduled" ${repeat?.mode !== 'completed' ? 'selected' : ''}>Data programada</option>
+                    <option value="completed" ${repeat?.mode === 'completed' ? 'selected' : ''}>Data da conclusão</option>
+                  </select></div>
+                  <div class="field"><label>Terminar em</label><input name="repeatEnd" type="date" value="${esc(repeat?.endDate || '')}" /></div>
+                </div>
+                <div class="repeat-custom" id="repeatCustom" ${repeatPreset !== 'custom' ? 'hidden' : ''}>
+                  <div class="repeat-grid">
+                    <div class="field"><label>A cada</label><input name="repeatInterval" type="number" min="1" max="365" value="${esc(repeat?.interval || 1)}" /></div>
+                    <div class="field"><label>Unidade</label><select name="repeatUnit" id="repeatUnit">
+                      <option value="day" ${repeat?.type === 'day' ? 'selected' : ''}>dia(s)</option>
+                      <option value="week" ${repeat?.type === 'week' ? 'selected' : ''}>semana(s)</option>
+                      <option value="month" ${repeat?.type === 'month' ? 'selected' : ''}>mês(es)</option>
+                      <option value="year" ${repeat?.type === 'year' ? 'selected' : ''}>ano(s)</option>
+                    </select></div>
+                  </div>
+                  <div class="weekday-picker" id="repeatWeekdays" ${repeat?.type !== 'week' ? 'hidden' : ''}>
+                    ${weekdayNames.map((name, day) => `<label><input type="checkbox" name="repeatDays" value="${day}" ${repeat?.days?.includes(day) ? 'checked' : ''}/><span>${name}</span></label>`).join('')}
+                  </div>
+                </div>
+              </div>
+              <div class="field"><label>Meta vinculada</label><select name="goalId"><option value="">Nenhuma</option>${state.goals.map((goal) => `<option value="${goal.id}" ${task?.goalId === goal.id ? 'selected' : ''}>${esc(goal.title)}</option>`).join('')}</select></div>
+              <div class="field"><label>Observação</label><textarea name="notes" placeholder="Opcional">${esc(task?.notes || '')}</textarea></div>
+            </div>
+          </details>
         </div>
         <div class="modal-actions">
           ${task ? '<button class="danger-button" id="deleteTaskBtn" type="button">Excluir</button>' : ''}
@@ -1085,7 +1105,7 @@
           <button class="primary-button" type="submit">Salvar tarefa</button>
         </div>
       </form>
-    `);
+    `, 'task-modal');
     $('#repeatPreset').onchange = updateRepeatEditor;
     $('#repeatUnit').onchange = updateRepeatEditor;
     $('#taskForm').onsubmit = (event) => {
@@ -1432,9 +1452,9 @@
           <div class="setting-copy"><strong>Lembretes neste aparelho</strong><span>${notificationPermission === 'granted' ? 'Permissão concedida. Alertas funcionam enquanto o sistema mantém o app ativo.' : 'Ative a permissão para receber alertas das tarefas com horário.'}</span></div>
           <label class="native-switch"><input id="notificationToggle" type="checkbox" switch ${state.settings.notificationsEnabled ? 'checked' : ''}/><span></span></label>
         </div>
-        <div class="setting-row">
-          <div class="setting-copy"><strong>Notificar com o app fechado</strong><span>O PWA já aceita push; falta conectar o servidor privado que dispara os alertas e sincroniza os aparelhos.</span></div>
-          <span class="deadline-chip urgent">servidor pendente</span>
+        <div class="setting-row" id="pushSettingRow">
+          <div class="setting-copy"><strong>Notificar com o app fechado</strong><span id="pushStatusCopy">Conecte sua conta para ativar os alertas Web Push.</span></div>
+          <button class="soft-button" id="pushServerBtn" type="button">Ativar</button>
         </div>
         <div class="setting-row">
           <div class="setting-copy"><strong>Movimento Spatial</strong><span>Transições elásticas, swipe nos dias e saída animada ao concluir.</span></div>
@@ -1455,9 +1475,14 @@
           <div class="setting-copy"><strong>Salvamento automático</strong><span>Cada tarefa, conclusão e alteração de meta é salva neste navegador imediatamente.</span></div>
           <span class="deadline-chip">ativo</span>
         </div>
-        <div class="setting-row">
-          <div class="setting-copy"><strong>Celular ↔ computador</strong><span>O armazenamento online ainda precisa ser conectado para sincronizar aparelhos diferentes.</span></div>
-          <button class="soft-button" id="cloudInfoBtn" type="button">Entender</button>
+        <div class="setting-row" id="cloudSettingRow">
+          <div class="setting-copy"><strong>Celular ↔ computador</strong><span id="cloudStatusCopy">Verificando o servidor seguro…</span></div>
+          <button class="soft-button" id="cloudAccountBtn" type="button">Conectar</button>
+        </div>
+        <div class="cloud-auth-panel" id="cloudAuthPanel" hidden>
+          <div class="field"><label>Email</label><input id="cloudEmail" type="email" autocomplete="email" placeholder="seu@email.com" /></div>
+          <button class="soft-button" id="cloudSendLinkBtn" type="button">Enviar link</button>
+          <span class="cloud-auth-note" id="cloudAuthNote">Use o mesmo email no celular e no computador. Você entra por um link seguro.</span>
         </div>
         <div class="setting-row">
           <div class="setting-copy"><strong>Backup</strong><span>Leve todas as tarefas e metas em um arquivo JSON.</span></div>
@@ -1567,9 +1592,7 @@
       closeModal();
       toast('Todas as tarefas foram apagadas.');
     };
-    $('#cloudInfoBtn').onclick = () => {
-      alert('Hoje o app salva automaticamente no aparelho. Para sincronização e push com o app fechado, é necessário conectar um banco e um emissor de Web Push com login. Nenhuma senha será colocada no código público.');
-    };
+    window.OBJETIVOS_CLOUD?.bindSettings?.();
   }
 
   function resetGoalValues() {
@@ -1791,7 +1814,12 @@
       todayNow: () => selectCalendarDate(localISO(), state.selectedDate > localISO() ? 'backward' : 'forward'),
       selectDate: () => selectCalendarDate(date, date >= state.selectedDate ? 'forward' : 'backward'),
       selectUpcomingDate: () => selectCalendarDate(date, 'forward'),
-      toggleCompletedDrawer: () => $('#completedDrawer')?.classList.toggle('open'),
+      toggleCompletedDrawer: () => {
+        const drawer = $('#completedDrawer');
+        if (!drawer) return;
+        const expanded = drawer.classList.toggle('open');
+        $('.completed-toggle', drawer)?.setAttribute('aria-expanded', String(expanded));
+      },
       resetGoalValues,
       moveOverdueToday
     };
@@ -1828,7 +1856,7 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=4').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=5').catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
@@ -1843,6 +1871,24 @@
     isTaskOnDate,
     recurrenceLabel,
     syncSystemDay,
+    applyCloudState(input) {
+      const currentView = state.view;
+      const currentDate = state.selectedDate;
+      const notificationSetting = state.settings.notificationsEnabled;
+      const incoming = sanitizeState(input);
+      incoming.view = currentView;
+      incoming.selectedDate = currentDate;
+      incoming.lastSystemDate = localISO();
+      incoming.settings.notificationsEnabled = notificationSetting;
+      state = incoming;
+      applyAppearance();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      channel?.postMessage?.({ source: INSTANCE_ID, state });
+      render();
+      setSaveStatus('sincronizado');
+      return JSON.parse(JSON.stringify(state));
+    },
+    setSyncLabel(label, saving = false) { setSaveStatus(label, saving); },
     reset() {
       state = freshState();
       save();

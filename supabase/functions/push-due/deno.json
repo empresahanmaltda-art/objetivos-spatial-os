@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.91.0",
+    "luxon": "npm:luxon@3.7.2",
+    "web-push": "npm:web-push@3.6.7"
+  }
+}
+
