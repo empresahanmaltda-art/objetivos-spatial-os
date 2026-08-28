@@ -1,4 +1,4 @@
-const CACHE = 'objetivos-spatial-v2';
+const CACHE = 'objetivos-spatial-v3';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './assets/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -19,5 +19,16 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(event.request).catch(() => caches.match('./index.html')));
     return;
   }
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+  if (new URL(event.request.url).origin !== self.location.origin) return;
+  event.respondWith(
+    fetch(event.request)
+      .then(async (response) => {
+        if (response.ok) {
+          const cache = await caches.open(CACHE);
+          await cache.put(event.request, response.clone());
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
+  );
 });
