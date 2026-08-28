@@ -744,7 +744,7 @@
   function cleanTaskTitle(text) {
     return String(text)
       .replace(/^(adicione|adicionar|crie|criar|coloque|anote|nova tarefa|tarefa)\s+/i, '')
-      .replace(/\s+(hoje|amanhã|amanha|depois de amanhã|depois de amanha)\b.*$/i, '')
+      .replace(/\s+(depois de amanhã|depois de amanha|amanhã|amanha|hoje)(?=\s|$).*$/i, '')
       .replace(/\s+(às|as|para)\s+\d{1,2}(?::|h)?\d{0,2}\s*(?:h|horas?)?.*$/i, '')
       .replace(/\s+por\s+\d+(?:[.,]\d+)?\s*(?:h|horas?|min|minutos?).*$/i, '')
       .trim()
