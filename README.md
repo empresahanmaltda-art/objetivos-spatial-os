@@ -16,12 +16,12 @@ Aplicativo pessoal focado em duas coisas: tarefas e metas com prazo. Não há da
 - Metas com alvo, realizado, unidade e prazo.
 - Valores realizados começam em zero; alvos e prazos pessoais são preservados.
 - Assistente local para criar, concluir e reagendar tarefas, além de criar, atualizar e zerar metas.
-- Salvamento automático no localStorage.
-- Atualização entre abas do mesmo navegador.
+- Salvamento automático local imediato e sincronização autenticada com Supabase.
+- Atualização em tempo real entre celular, computador e abas abertas.
 - Backup e restauração em JSON.
 - Layout responsivo com área segura para iPhone.
 - PWA com cache offline.
-- Permissão e exibição de lembretes locais enquanto o app está ativo, além de suporte de recebimento Web Push no service worker.
+- Lembretes locais e Web Push disparado pelo servidor mesmo com o PWA fechado.
 
 ## Executar localmente
 
@@ -29,6 +29,10 @@ Aplicativo pessoal focado em duas coisas: tarefas e metas com prazo. Não há da
 
 Abra http://localhost:8080.
 
-## Persistência
+## Sincronização e push
 
-Todas as alterações são salvas automaticamente no navegador. O armazenamento local não atravessa aparelhos: sincronização automática entre celular e computador e notificações confiáveis com o app fechado requerem um backend autenticado que armazene os dados e envie Web Push. Nenhuma senha ou chave privada deve ser embutida no repositório público.
+O frontend usa somente a URL e a chave publicável do Supabase em `cloud-config.js`. A segurança dos dados é garantida por autenticação e Row Level Security: cada conta lê e altera apenas o próprio estado. Chaves privadas, a chave administrativa, o segredo do cron e a chave VAPID privada ficam somente nos Secrets/Vault do Supabase.
+
+O schema está em `supabase/migrations`, a função de notificações em `supabase/functions/push-due` e o agendamento em `supabase/setup-cron.example.sql`. Depois do deploy, abra Configurações no app, conecte o mesmo email em cada aparelho e ative os alertas separadamente em cada dispositivo.
+
+No iPhone, notificações com o app fechado exigem instalar o site na Tela de Início e abrir essa versão instalada antes de ativar os alertas.

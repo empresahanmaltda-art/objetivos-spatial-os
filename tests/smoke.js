@@ -13,6 +13,7 @@ class ClassList {
     else if (force === false) this.values.delete(item);
     else if (this.values.has(item)) this.values.delete(item);
     else this.values.add(item);
+    return this.values.has(item);
   }
 }
 
@@ -56,7 +57,10 @@ const elements = {
   toastLayer: new Element('toastLayer'),
   commandBtn: new Element('commandBtn'),
   settingsBtn: new Element('settingsBtn'),
-  quickAdd: new Element('quickAdd')
+  quickAdd: new Element('quickAdd'),
+  repeatPreset: new Element('repeatPreset'),
+  repeatUnit: new Element('repeatUnit'),
+  taskForm: new Element('taskForm')
 };
 
 const selectors = {
@@ -68,7 +72,10 @@ const selectors = {
   '#toastLayer': elements.toastLayer,
   '#commandBtn': elements.commandBtn,
   '#settingsBtn': elements.settingsBtn,
-  '#quickAdd': elements.quickAdd
+  '#quickAdd': elements.quickAdd,
+  '#repeatPreset': elements.repeatPreset,
+  '#repeatUnit': elements.repeatUnit,
+  '#taskForm': elements.taskForm
 };
 
 const store = new Map();
@@ -202,6 +209,13 @@ api.executeCommand('Zere os valores realizados das metas');
 state = api.getState();
 assert(state.goals.every((goal) => goal.current === 0));
 assert(store.has('objetivos-spatial-os-v2'));
+
+elements.quickAdd.onclick();
+assert(elements.modalLayer.innerHTML.includes('modal glass task-modal'), 'compact task modal class missing');
+assert(elements.modalLayer.innerHTML.includes('class="task-core-grid"'), 'compact task core grid missing');
+assert(elements.modalLayer.innerHTML.includes('class="task-options-grid"'), 'compact task options grid missing');
+assert(elements.modalLayer.innerHTML.includes('<details class="task-advanced"'), 'advanced task fields are not collapsible');
+assert(!elements.modalLayer.innerHTML.includes('<div class="input-grid">'), 'legacy oversized task form leaked');
 
 console.log(JSON.stringify({
   ok: true,
