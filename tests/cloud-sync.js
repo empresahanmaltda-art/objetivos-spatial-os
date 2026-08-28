@@ -9,6 +9,8 @@ async function main() {
   let realtimeHandler = null;
   let remoteApplied = null;
   let status = '';
+  let assignedUrl = '';
+  let verifiedOtp = null;
   const session = { user: { id: 'user-1', email: 'owner@example.com' } };
   const localState = {
     version: 3,
@@ -30,7 +32,8 @@ async function main() {
   const client = {
     auth: {
       onAuthStateChange() {},
-      async getSession() { return { data: { session } }; }
+      async getSession() { return { data: { session } }; },
+      async verifyOtp(params) { verifiedOtp = params; return { data: { session }, error: null }; }
     },
     from(table) {
       assert.strictEqual(table, 'user_state');
@@ -59,6 +62,11 @@ async function main() {
     __OBJETIVOS__: api,
     OBJETIVOS_CLOUD_CONFIG: { supabaseUrl: 'https://project.supabase.co', publishableKey: 'public-key', vapidPublicKey: '' },
     supabase: { createClient: () => client },
+    location: {
+      origin: 'https://empresahanmaltda-art.github.io',
+      pathname: '/objetivos-spatial-os/',
+      assign(url) { assignedUrl = url; }
+    },
     addEventListener(type, handler) { savedListeners.set(type, handler); }
   };
   const context = {
@@ -77,6 +85,7 @@ async function main() {
     Boolean,
     Array,
     Object,
+    URL,
     console,
     setTimeout,
     clearTimeout,
@@ -104,7 +113,19 @@ async function main() {
   realtimeHandler({ new: { payload: { version: 3, tasks: [{ id: 'remote', title: 'Remoto' }], goals: [], settings: {} } } });
   assert(remoteApplied?.tasks?.some((task) => task.id === 'remote'), 'remote state was not applied');
 
-  console.log(JSON.stringify({ ok: true, initialUpload: true, autosaveUpload: true, realtimeApply: true }));
+  await window.OBJETIVOS_CLOUD.openLoginLink('https://project.supabase.co/auth/v1/verify?token=abc&type=magiclink');
+  assert.strictEqual(verifiedOtp.token_hash, 'abc');
+  assert.strictEqual(verifiedOtp.type, 'magiclink');
+
+  await window.OBJETIVOS_CLOUD.openLoginLink('https://empresahanmaltda-art.github.io/objetivos-spatial-os/#access_token=test');
+  assert.strictEqual(assignedUrl, 'https://empresahanmaltda-art.github.io/objetivos-spatial-os/#access_token=test');
+
+  let rejectedUntrustedLink = false;
+  try { await window.OBJETIVOS_CLOUD.openLoginLink('https://evil.example/auth/v1/verify?token=stolen'); }
+  catch { rejectedUntrustedLink = true; }
+  assert(rejectedUntrustedLink, 'untrusted login link was accepted');
+
+  console.log(JSON.stringify({ ok: true, initialUpload: true, autosaveUpload: true, realtimeApply: true, safePwaLogin: true }));
 }
 
 main().catch((error) => {

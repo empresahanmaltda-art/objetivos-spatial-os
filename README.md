@@ -35,4 +35,4 @@ O frontend usa somente a URL e a chave publicável do Supabase em `cloud-config.
 
 O schema está em `supabase/migrations`, a função de notificações em `supabase/functions/push-due` e o agendamento em `supabase/setup-cron.example.sql`. Depois do deploy, abra Configurações no app, conecte o mesmo email em cada aparelho e ative os alertas separadamente em cada dispositivo.
 
-No iPhone, notificações com o app fechado exigem instalar o site na Tela de Início e abrir essa versão instalada antes de ativar os alertas.
+No iPhone, notificações com o app fechado exigem instalar o site na Tela de Início e abrir essa versão instalada antes de ativar os alertas. Como links vindos do email abrem no navegador, o painel de conexão permite copiar o link “Sign in” recebido e validá-lo diretamente dentro do PWA instalado.

@@ -783,7 +783,7 @@
     return `
       <article class="task-card ${overdue ? 'overdue' : ''} ${completed ? 'completed' : ''}" data-task-id="${task.id}" data-task-date="${date}" data-swipe-left="${esc(state.settings.swipeLeft)}" data-swipe-right="${esc(state.settings.swipeRight)}">
         <button class="task-check" data-action="toggleTask" data-id="${task.id}" data-date="${date}" type="button" aria-label="${completed ? 'Desfazer conclusão' : 'Concluir tarefa'}">
-          ${completed ? '<svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4.3 10.4 8.1 14l7.6-8"/></svg>' : ''}
+          ${completed ? '<svg aria-hidden="true" viewBox="0 0 20 20"><path d="M5 10.2 8.4 13.4 15 6.8"/></svg>' : ''}
         </button>
         <div class="task-copy">
           <div class="task-title">${esc(task.title)}</div>
@@ -1482,6 +1482,8 @@
         <div class="cloud-auth-panel" id="cloudAuthPanel" hidden>
           <div class="field"><label>Email</label><input id="cloudEmail" type="email" autocomplete="email" placeholder="seu@email.com" /></div>
           <button class="soft-button" id="cloudSendLinkBtn" type="button">Enviar link</button>
+          <div class="field cloud-link-field" id="cloudLinkField" hidden><label>Link recebido</label><input id="cloudMagicLink" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Cole aqui o link “Sign in”" /></div>
+          <button class="primary-button cloud-link-action" id="cloudOpenLinkBtn" type="button" hidden>Entrar neste app</button>
           <span class="cloud-auth-note" id="cloudAuthNote">Use o mesmo email no celular e no computador. Você entra por um link seguro.</span>
         </div>
         <div class="setting-row">
