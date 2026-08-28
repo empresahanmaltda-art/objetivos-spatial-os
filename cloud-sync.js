@@ -140,25 +140,18 @@
       .subscribe();
   }
 
-  async function sendCode(email) {
+  async function sendLink(email) {
     if (!runtime.client) throw new Error('Servidor ainda não configurado.');
     const cleanEmail = String(email || '').trim().toLowerCase();
     if (!cleanEmail.includes('@')) throw new Error('Digite um email válido.');
     localStorage.setItem(EMAIL_KEY, cleanEmail);
-    const { error } = await runtime.client.auth.signInWithOtp({ email: cleanEmail, options: { shouldCreateUser: true } });
-    if (error) throw error;
-    return cleanEmail;
-  }
-
-  async function verifyCode(email, token) {
-    if (!runtime.client) throw new Error('Servidor ainda não configurado.');
-    const { data, error } = await runtime.client.auth.verifyOtp({
-      email: String(email || '').trim(), token: String(token || '').trim(), type: 'email'
+    const emailRedirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { error } = await runtime.client.auth.signInWithOtp({
+      email: cleanEmail,
+      options: { shouldCreateUser: true, emailRedirectTo }
     });
     if (error) throw error;
-    runtime.session = data.session;
-    await initialSync();
-    refreshSettings();
+    return cleanEmail;
   }
 
   function urlBase64ToBytes(value) {
@@ -237,13 +230,10 @@
     const accountButton = document.querySelector('#cloudAccountBtn');
     const panel = document.querySelector('#cloudAuthPanel');
     const email = document.querySelector('#cloudEmail');
-    const send = document.querySelector('#cloudSendCodeBtn');
-    const codeField = document.querySelector('#cloudCodeField');
-    const code = document.querySelector('#cloudCode');
-    const verify = document.querySelector('#cloudVerifyCodeBtn');
+    const send = document.querySelector('#cloudSendLinkBtn');
     const note = document.querySelector('#cloudAuthNote');
     const pushButton = document.querySelector('#pushServerBtn');
-    if (!accountButton || !panel || !email || !send || !codeField || !code || !verify || !note || !pushButton) return;
+    if (!accountButton || !panel || !email || !send || !note || !pushButton) return;
     email.value = localStorage.getItem(EMAIL_KEY) || '';
     accountButton.onclick = async () => {
       if (runtime.session) {
@@ -258,24 +248,11 @@
       send.disabled = true;
       note.textContent = 'Enviando…';
       try {
-        await sendCode(email.value);
-        codeField.hidden = false;
-        verify.hidden = false;
-        note.textContent = 'Código enviado. Digite os números recebidos no email.';
-        code.focus();
+        await sendLink(email.value);
+        note.textContent = 'Link enviado. Abra o email neste aparelho e toque em “Sign in”.';
       } catch (error) {
-        note.textContent = error.message || 'Não foi possível enviar o código.';
+        note.textContent = error.message || 'Não foi possível enviar o link.';
       } finally { send.disabled = false; }
-    };
-    verify.onclick = async () => {
-      verify.disabled = true;
-      note.textContent = 'Conectando…';
-      try {
-        await verifyCode(email.value, code.value);
-        note.textContent = 'Conta conectada e dados sincronizados.';
-      } catch (error) {
-        note.textContent = error.message || 'Código inválido ou expirado.';
-      } finally { verify.disabled = false; }
     };
     pushButton.onclick = async () => {
       pushButton.disabled = true;

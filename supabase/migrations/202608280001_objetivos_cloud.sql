@@ -56,6 +56,12 @@ grant select, insert, update on public.user_state to authenticated;
 grant select, insert, update, delete on public.push_subscriptions to authenticated;
 revoke all on public.push_deliveries from anon, authenticated;
 
+-- Edge Functions authenticate as service_role and need explicit table grants
+-- when automatic Data API grants for new tables are disabled.
+grant select, insert, update, delete on public.user_state to service_role;
+grant select, insert, update, delete on public.push_subscriptions to service_role;
+grant select, insert, update, delete on public.push_deliveries to service_role;
+
 do $$
 begin
   if not exists (
@@ -65,4 +71,3 @@ begin
     alter publication supabase_realtime add table public.user_state;
   end if;
 end $$;
-

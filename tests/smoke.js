@@ -215,6 +215,7 @@ assert(elements.modalLayer.innerHTML.includes('modal glass task-modal'), 'compac
 assert(elements.modalLayer.innerHTML.includes('class="task-core-grid"'), 'compact task core grid missing');
 assert(elements.modalLayer.innerHTML.includes('class="task-options-grid"'), 'compact task options grid missing');
 assert(elements.modalLayer.innerHTML.includes('<details class="task-advanced"'), 'advanced task fields are not collapsible');
+assert(elements.modalLayer.innerHTML.indexOf('<label>Duração</label>') > elements.modalLayer.innerHTML.indexOf('<details class="task-advanced"'), 'duration must stay inside compact advanced options');
 assert(!elements.modalLayer.innerHTML.includes('<div class="input-grid">'), 'legacy oversized task form leaked');
 
 console.log(JSON.stringify({

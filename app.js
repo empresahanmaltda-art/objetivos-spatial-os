@@ -1046,7 +1046,6 @@
           <div class="task-core-grid">
             <div class="field task-date-field"><label>Data</label><input name="date" type="date" required value="${esc(date)}" /></div>
             <div class="field"><label>Horário</label><input name="time" type="time" value="${esc(task?.time || '')}" /></div>
-            <div class="field"><label>Duração</label><div class="duration-input"><input name="duration" type="number" min="5" step="5" inputmode="numeric" value="${esc(task?.duration || state.settings.defaultDuration)}" /><span>min</span></div></div>
           </div>
           <div class="task-options-grid">
             <div class="field"><label>Repetição</label><select name="repeatPreset" id="repeatPreset">
@@ -1069,8 +1068,9 @@
             </select></div>
           </div>
           <details class="task-advanced" id="taskAdvanced" ${advancedOpen ? 'open' : ''}>
-            <summary><span>Mais opções</span><small>repetição avançada, meta e observação</small></summary>
+            <summary><span>Mais opções</span><small>duração, repetição avançada, meta e nota</small></summary>
             <div class="task-advanced-content">
+              <div class="field"><label>Duração</label><div class="duration-input"><input name="duration" type="number" min="5" step="5" inputmode="numeric" value="${esc(task?.duration || state.settings.defaultDuration)}" /><span>min</span></div></div>
               <div class="repeat-editor" id="repeatAdvanced" ${repeatPreset === 'none' ? 'hidden' : ''}>
                 <div class="repeat-grid">
                   <div class="field"><label>Repetir pela</label><select name="repeatMode">
@@ -1481,10 +1481,8 @@
         </div>
         <div class="cloud-auth-panel" id="cloudAuthPanel" hidden>
           <div class="field"><label>Email</label><input id="cloudEmail" type="email" autocomplete="email" placeholder="seu@email.com" /></div>
-          <button class="soft-button" id="cloudSendCodeBtn" type="button">Enviar código</button>
-          <div class="field cloud-code-field" id="cloudCodeField" hidden><label>Código recebido</label><input id="cloudCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="000000" /></div>
-          <button class="primary-button" id="cloudVerifyCodeBtn" type="button" hidden>Entrar e sincronizar</button>
-          <span class="cloud-auth-note" id="cloudAuthNote">Use o mesmo email no celular e no computador.</span>
+          <button class="soft-button" id="cloudSendLinkBtn" type="button">Enviar link</button>
+          <span class="cloud-auth-note" id="cloudAuthNote">Use o mesmo email no celular e no computador. Você entra por um link seguro.</span>
         </div>
         <div class="setting-row">
           <div class="setting-copy"><strong>Backup</strong><span>Leve todas as tarefas e metas em um arquivo JSON.</span></div>

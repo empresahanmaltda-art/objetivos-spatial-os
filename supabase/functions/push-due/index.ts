@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
-import { DateTime } from 'luxon'
-import webpush from 'web-push'
+import { createClient } from 'npm:@supabase/supabase-js@2.91.0'
+import { DateTime } from 'npm:luxon@3.7.2'
+import webpush from 'npm:web-push@3.6.7'
 
 type Repeat = {
   type: 'day' | 'week' | 'month' | 'year'
@@ -171,4 +171,3 @@ export default {
     return new Response(JSON.stringify({ ok: true, sent, failed }), { headers: jsonHeaders })
   }
 }
-
