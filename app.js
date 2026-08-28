@@ -1,463 +1,1042 @@
 (() => {
   'use strict';
 
-  const $ = (s, root = document) => root.querySelector(s);
-  const $$ = (s, root = document) => [...root.querySelectorAll(s)];
-  const STORAGE_KEY = 'objetivosSpatialOS.v1';
-  const todayISO = () => new Date().toISOString().slice(0,10);
-  const fmtDate = (iso) => new Intl.DateTimeFormat('pt-BR',{weekday:'long',day:'2-digit',month:'short'}).format(new Date(iso+'T12:00:00'));
-  const fmtShort = (iso) => new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'2-digit'}).format(new Date(iso+'T12:00:00'));
-  const clamp = (n,min,max)=>Math.max(min,Math.min(max,n));
-  const uid = (p='id') => `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
-  const minutes = t => { const [h,m='0'] = String(t||'0:0').split(':').map(Number); return h*60+m; };
-  const timeFromMin = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-  const addDays = (iso,d) => { const x=new Date(iso+'T12:00:00'); x.setDate(x.getDate()+d); return x.toISOString().slice(0,10); };
-  const dayIndex = iso => new Date(iso+'T12:00:00').getDay();
-  const esc = s => String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const STORAGE_KEY = 'objetivos-spatial-os-v2';
+  const LEGACY_KEY = 'objetivos-spatial-os-v1';
+  const CHANNEL_NAME = 'objetivos-spatial-os-sync';
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+  const INSTANCE_ID = uid('tab');
+  const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char]);
+  const normalize = (value = '') => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
-  const seed = () => ({
-    version: 1,
-    currentView: 'today',
-    cycleStart: addDays(todayISO(),-42),
-    profile: { level:24, xp:6840, streak:17, name:'Kauan' },
-    settings: { autoOptimize:true, sound:false, spotifyUrl:'', startHour:7, endHour:23 },
-    tasks: [
-      {id:'t1',title:'Russo — revisão e exercícios',date:todayISO(),duration:45,start:'09:00',fixed:false,priority:2,category:'russo',recurrence:null,goalId:'g3',xp:35},
-      {id:'t2',title:'Campanha TikTok — Bloco 1',date:todayISO(),duration:70,start:'11:00',fixed:false,priority:3,category:'tiktok',recurrence:null,goalId:'g2',xp:55},
-      {id:'t3',title:'Almoço',date:todayISO(),duration:40,start:'13:30',fixed:true,priority:1,category:'dieta',recurrence:null,xp:10},
-      {id:'t4',title:'Reunião',date:todayISO(),duration:90,start:'15:00',fixed:true,priority:3,category:'trabalho',recurrence:null,xp:20},
-      {id:'t5',title:'Criativos campanha',date:todayISO(),duration:75,start:'16:45',fixed:false,priority:3,category:'marketing',recurrence:null,goalId:'g2',xp:50},
-      {id:'t6',title:'Academia',date:todayISO(),duration:75,start:'18:40',fixed:false,priority:3,category:'academia',recurrence:{days:[1,2,3,4,5,6]},goalId:'g4',xp:60},
-      {id:'t7',title:'Jantar',date:todayISO(),duration:35,start:'20:25',fixed:true,priority:1,category:'dieta',recurrence:{days:[0,1,2,3,4,5,6]},xp:10}
-    ],
-    completions: {},
-    scheduleOverrides: {},
-    goals: [
-      {id:'g1',title:'Meta financeira mensal',area:'financeiro',target:100000,unit:'R$',deadline:addDays(todayISO(),30),type:'finance',manualCurrent:null},
-      {id:'g2',title:'Execução de conteúdo',area:'tiktok',target:30,unit:'entregas',deadline:addDays(todayISO(),84),type:'taskCount',category:'tiktok'},
-      {id:'g3',title:'Russo consistente',area:'russo',target:60,unit:'sessões',deadline:addDays(todayISO(),84),type:'taskCount',category:'russo'},
-      {id:'g4',title:'Treinar com consistência',area:'academia',target:60,unit:'treinos',deadline:addDays(todayISO(),84),type:'taskCount',category:'academia'},
-      {id:'g5',title:'Chegar a 60 kg',area:'academia',target:60,unit:'kg',deadline:addDays(todayISO(),120),type:'manual',manualCurrent:42.9}
-    ],
-    finance: [
-      {id:'f1',date:addDays(todayISO(),-18),label:'Venda Produto A',amount:7800,type:'income'},
-      {id:'f2',date:addDays(todayISO(),-16),label:'Tráfego pago',amount:2150,type:'expense'},
-      {id:'f3',date:addDays(todayISO(),-14),label:'Venda Produto A',amount:12400,type:'income'},
-      {id:'f4',date:addDays(todayISO(),-11),label:'Ferramentas',amount:780,type:'expense'},
-      {id:'f5',date:addDays(todayISO(),-9),label:'Venda Produto B',amount:9650,type:'income'},
-      {id:'f6',date:addDays(todayISO(),-7),label:'Tráfego pago',amount:3920,type:'expense'},
-      {id:'f7',date:addDays(todayISO(),-5),label:'Venda Produto A',amount:14300,type:'income'},
-      {id:'f8',date:addDays(todayISO(),-3),label:'Venda Produto B',amount:9850,type:'income'},
-      {id:'f9',date:addDays(todayISO(),-2),label:'Ferramentas',amount:1260,type:'expense'},
-      {id:'f10',date:todayISO(),label:'Venda Produto A',amount:13450,type:'income'}
-    ],
-    weights: [{date:addDays(todayISO(),-40),value:41.8},{date:addDays(todayISO(),-20),value:42.3},{date:todayISO(),value:42.9}],
-    notes: [],
-    aiLog: [{date:Date.now(),text:'Agenda otimizada automaticamente. “Criativos campanha” foi posicionado após a reunião.'}]
-  });
+  function localISO(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 
-  let state = load();
-  let currentDate = todayISO();
+  function parseISO(value) {
+    const [year, month, day] = String(value).split('-').map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0);
+  }
 
-  const navItems = [
-    ['today','H','Hoje'],['week','W','Semana'],['goals','G','Metas'],['finance','$','Financeiro'],['areas','A','Áreas'],['control','C','Controle']
+  function addDays(value, amount) {
+    const date = parseISO(value);
+    date.setDate(date.getDate() + amount);
+    return localISO(date);
+  }
+
+  function dayDiff(from, to) {
+    return Math.round((parseISO(to) - parseISO(from)) / 86400000);
+  }
+
+  function formatLongDate(value) {
+    return new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(parseISO(value));
+  }
+
+  function formatShortDate(value) {
+    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(parseISO(value)).replace('.', '');
+  }
+
+  function formatDayLabel(value) {
+    const today = localISO();
+    if (value === today) return 'Hoje';
+    if (value === addDays(today, 1)) return 'Amanhã';
+    if (value === addDays(today, -1)) return 'Ontem';
+    return new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(parseISO(value));
+  }
+
+  function minutesFromTime(value) {
+    if (!value) return Number.POSITIVE_INFINITY;
+    const [hour, minute] = value.split(':').map(Number);
+    return hour * 60 + minute;
+  }
+
+  function formatDuration(value) {
+    const minutes = Number(value) || 0;
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return rest ? `${hours}h ${rest}min` : `${hours}h`;
+  }
+
+  const seedGoals = () => [
+    {
+      id: 'goal-brl-30k',
+      title: 'R$ 30 mil por mês',
+      target: 30000,
+      current: 0,
+      unit: 'R$',
+      deadline: '2026-11-30',
+      note: 'Portão de segurança: manter a renda líquida por 3 meses.'
+    },
+    {
+      id: 'goal-usd-10k',
+      title: 'US$ 10 mil por mês',
+      target: 10000,
+      current: 0,
+      unit: 'US$',
+      deadline: '2026-11-30',
+      note: 'Meta aspiracional de novembro.'
+    },
+    {
+      id: 'goal-usd-100k',
+      title: 'US$ 100 mil por mês',
+      target: 100000,
+      current: 0,
+      unit: 'US$',
+      deadline: '2027-02-28',
+      note: 'Próximo degrau de escala.'
+    },
+    {
+      id: 'goal-usd-1m',
+      title: 'US$ 1 milhão por mês',
+      target: 1000000,
+      current: 0,
+      unit: 'US$',
+      deadline: '2027-12-31',
+      note: 'Marco de longo prazo.'
+    }
   ];
 
-  function load(){
-    try { const raw=localStorage.getItem(STORAGE_KEY); return raw ? {...seed(),...JSON.parse(raw)} : seed(); }
-    catch { return seed(); }
+  function freshState() {
+    return {
+      version: 2,
+      view: 'today',
+      selectedDate: localISO(),
+      tasks: [],
+      goals: seedGoals(),
+      settings: {
+        hideCompleted: true,
+        defaultDuration: 60
+      },
+      updatedAt: new Date().toISOString(),
+      revision: 0
+    };
   }
-  function save(){
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-    $('#syncStatus').textContent='salvo agora';
-    setTimeout(()=>{$('#syncStatus').textContent='salvo localmente';},900);
-  }
-  function reset(){ state=seed(); currentDate=todayISO(); save(); render(); }
 
-  function occurrenceKey(task,date){ return `${task.id}@${date}`; }
-  function isRecurringOn(task,date){
-    if(!task.recurrence) return task.date===date;
-    return date>=task.date && task.recurrence.days?.includes(dayIndex(date));
+  function migrateLegacy() {
+    const next = freshState();
+    try {
+      const raw = localStorage.getItem(LEGACY_KEY);
+      if (!raw) return next;
+      const legacy = JSON.parse(raw);
+      const demoIds = new Set(['t1', 't2', 't3', 't4', 't5', 't6', 't7']);
+      const userTasks = Array.isArray(legacy.tasks)
+        ? legacy.tasks.filter((task) => !demoIds.has(task.id)).map((task) => ({
+            id: task.id || uid('task'),
+            title: task.title || 'Tarefa',
+            date: task.date || localISO(),
+            time: task.start || '',
+            duration: Number(task.duration) || 60,
+            recurrence: task.recurrence?.days?.length === 7 ? 'daily' : 'none',
+            goalId: task.goalId || '',
+            notes: task.notes || '',
+            createdAt: Date.now(),
+            completedAt: null,
+            completions: {}
+          }))
+        : [];
+      const userGoals = Array.isArray(legacy.goals)
+        ? legacy.goals.filter((goal) => !/^g[1-5]$/.test(goal.id || '')).map((goal) => ({
+            id: goal.id || uid('goal'),
+            title: goal.title || 'Meta',
+            target: Number(goal.target) || 1,
+            current: 0,
+            unit: goal.unit || 'unid.',
+            deadline: goal.deadline || addDays(localISO(), 90),
+            note: ''
+          }))
+        : [];
+      next.tasks = userTasks;
+      next.goals.push(...userGoals);
+    } catch {
+      return next;
+    }
+    return next;
   }
-  function taskDateEligible(task,date){ return task.recurrence ? isRecurringOn(task,date) : task.date===date; }
-  function isDone(task,date){ return !!state.completions[occurrenceKey(task,date)]; }
-  function effectiveStart(task,date){ return state.scheduleOverrides[occurrenceKey(task,date)] || task.start || ''; }
-  function getTasksForDate(date){
-    return state.tasks.filter(t=>taskDateEligible(t,date)).map(t=>({...t,start:effectiveStart(t,date)})).sort((a,b)=>minutes(a.start)-minutes(b.start));
-  }
-  function completedCountCategory(category){
-    return Object.keys(state.completions).filter(k=>{
-      const id=k.split('@')[0], t=state.tasks.find(x=>x.id===id); return t?.category===category;
-    }).length;
-  }
-  function financeSummary(){
-    const income=state.finance.filter(x=>x.type==='income').reduce((a,b)=>a+b.amount,0);
-    const expense=state.finance.filter(x=>x.type==='expense').reduce((a,b)=>a+b.amount,0);
-    return {income,expense,profit:income-expense,balance:income-expense};
-  }
-  function goalCurrent(g){
-    if(g.type==='finance') return financeSummary().income;
-    if(g.type==='taskCount') return completedCountCategory(g.category);
-    if(g.type==='manual') return g.manualCurrent||0;
-    return 0;
-  }
-  function goalProgress(g){ return clamp(goalCurrent(g)/g.target,0,1); }
-  function todayProgress(){ const list=getTasksForDate(currentDate); if(!list.length)return 0; return list.filter(t=>isDone(t,currentDate)).length/list.length; }
-  function xpToday(){ return getTasksForDate(currentDate).filter(t=>isDone(t,currentDate)).reduce((a,t)=>a+(t.xp||20),0); }
 
-  function syncLevel(){ state.profile.level=Math.max(1,Math.floor(state.profile.xp/300)+2); }
-  function toggleTask(id,date=currentDate){
-    const task=state.tasks.find(t=>t.id===id); if(!task)return;
-    const key=occurrenceKey(task,date);
-    if(state.completions[key]){
-      delete state.completions[key]; state.profile.xp=Math.max(0,state.profile.xp-(task.xp||20)); toast('Conclusão desfeita.');
+  function sanitizeState(input) {
+    const base = freshState();
+    if (!input || typeof input !== 'object') return base;
+    return {
+      ...base,
+      ...input,
+      version: 2,
+      view: ['today', 'upcoming', 'goals'].includes(input.view) ? input.view : 'today',
+      selectedDate: /^\d{4}-\d{2}-\d{2}$/.test(input.selectedDate || '') ? input.selectedDate : localISO(),
+      tasks: Array.isArray(input.tasks) ? input.tasks : [],
+      goals: Array.isArray(input.goals) && input.goals.length ? input.goals : seedGoals(),
+      settings: { ...base.settings, ...(input.settings || {}) }
+    };
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return sanitizeState(JSON.parse(raw));
+    } catch {
+      // A clean state is safer than a broken boot.
+    }
+    const migrated = migrateLegacy();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    return migrated;
+  }
+
+  let state = loadState();
+  let channel = null;
+  let suppressBroadcast = false;
+
+  try {
+    channel = 'BroadcastChannel' in globalThis ? new BroadcastChannel(CHANNEL_NAME) : null;
+    if (channel) {
+      channel.onmessage = (event) => {
+        if (!event.data?.state || event.data.source === INSTANCE_ID) return;
+        const incoming = sanitizeState(event.data.state);
+        if ((incoming.revision || 0) <= (state.revision || 0)) return;
+        suppressBroadcast = true;
+        state = incoming;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        suppressBroadcast = false;
+        render();
+        setSaveStatus('atualizado');
+      };
+    }
+  } catch {
+    channel = null;
+  }
+
+  function setSaveStatus(label = 'salvo neste aparelho', saving = false) {
+    const status = $('#syncStatus');
+    if (!status) return;
+    status.classList.toggle('saving', saving);
+    const copy = $('span', status);
+    if (copy) copy.textContent = label;
+  }
+
+  function save({ broadcast = true } = {}) {
+    state.updatedAt = new Date().toISOString();
+    state.revision = (Number(state.revision) || 0) + 1;
+    setSaveStatus('salvando…', true);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (broadcast && channel && !suppressBroadcast) {
+      channel.postMessage({ source: INSTANCE_ID, state });
+    }
+    requestAnimationFrame(() => setSaveStatus('salvo neste aparelho'));
+  }
+
+  function toast(message) {
+    const node = document.createElement('div');
+    node.className = 'toast';
+    node.textContent = message;
+    $('#toastLayer').append(node);
+    setTimeout(() => node.remove(), 2600);
+  }
+
+  function isTaskOnDate(task, date) {
+    if (!task || date < task.date) return false;
+    const recurrence = task.recurrence || 'none';
+    if (recurrence === 'none') return task.date === date;
+    const weekday = parseISO(date).getDay();
+    if (recurrence === 'daily') return true;
+    if (recurrence === 'weekdays') return weekday >= 1 && weekday <= 5;
+    if (recurrence === 'weekly') return weekday === parseISO(task.date).getDay();
+    return task.date === date;
+  }
+
+  function isTaskDone(task, date) {
+    if ((task.recurrence || 'none') === 'none') return Boolean(task.completedAt);
+    return Boolean(task.completions?.[date]);
+  }
+
+  function tasksForDate(date, { includeCompleted = true } = {}) {
+    return state.tasks
+      .filter((task) => isTaskOnDate(task, date))
+      .filter((task) => includeCompleted || !isTaskDone(task, date))
+      .sort((a, b) => minutesFromTime(a.time) - minutesFromTime(b.time) || (a.createdAt || 0) - (b.createdAt || 0));
+  }
+
+  function overdueTasks() {
+    return state.tasks
+      .filter((task) => (task.recurrence || 'none') === 'none' && task.date < localISO() && !task.completedAt)
+      .sort((a, b) => a.date.localeCompare(b.date) || minutesFromTime(a.time) - minutesFromTime(b.time));
+  }
+
+  function goalById(id) {
+    return state.goals.find((goal) => goal.id === id);
+  }
+
+  function goalProgress(goal) {
+    if (!goal || !Number(goal.target)) return 0;
+    return clamp((Number(goal.current) || 0) / Number(goal.target), 0, 1);
+  }
+
+  function formatGoalValue(goal, value) {
+    const number = Number(value) || 0;
+    const digits = Number.isInteger(number) ? 0 : 1;
+    const formatted = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: digits }).format(number);
+    if (goal.unit === 'R$' || goal.unit === 'US$') return `${goal.unit} ${formatted}`;
+    return `${formatted} ${goal.unit || ''}`.trim();
+  }
+
+  function recurrenceLabel(value) {
+    return ({ none: '', daily: 'todo dia', weekdays: 'seg–sex', weekly: 'semanal' })[value || 'none'] || '';
+  }
+
+  function toggleTask(taskId, date = state.selectedDate) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    const recurring = (task.recurrence || 'none') !== 'none';
+    const done = isTaskDone(task, date);
+    if (recurring) {
+      task.completions ||= {};
+      if (done) delete task.completions[date];
+      else task.completions[date] = Date.now();
     } else {
-      state.completions[key]={at:Date.now()}; state.profile.xp+=(task.xp||20); toast(`+${task.xp||20} XP · ${task.title}`);
+      task.completedAt = done ? null : Date.now();
     }
-    syncLevel(); save(); render();
+    save();
+    render();
+    toast(done ? 'Tarefa devolvida para a lista.' : 'Concluída e arquivada.');
   }
 
-  function findSlot(date,duration,occupied,preferredStart=null){
-    const start=state.settings.startHour*60, end=state.settings.endHour*60;
-    const sorted=[...occupied].sort((a,b)=>a[0]-b[0]);
-    const candidates=[];
-    for(let m=start;m+duration<=end;m+=5){
-      if(sorted.every(([a,b])=>m+duration<=a || m>=b)) candidates.push(m);
-    }
-    if(!candidates.length)return null;
-    if(preferredStart!=null) return candidates.sort((a,b)=>Math.abs(a-preferredStart)-Math.abs(b-preferredStart))[0];
-    return candidates[0];
+  function deleteTask(taskId) {
+    state.tasks = state.tasks.filter((task) => task.id !== taskId);
+    save();
+    render();
+    toast('Tarefa removida.');
   }
 
-  function optimizeDay(date, reason='Otimização automática'){
-    const tasks=state.tasks.filter(t=>taskDateEligible(t,date));
-    const fixed=tasks.filter(t=>t.fixed && effectiveStart(t,date));
-    const flex=tasks.filter(t=>!t.fixed);
-    const occupied=fixed.map(t=>[minutes(effectiveStart(t,date)),minutes(effectiveStart(t,date))+t.duration,t.id]);
-    const changes=[];
-    flex.sort((a,b)=>(b.priority||1)-(a.priority||1) || new Date(a.deadline||'2999-01-01')-new Date(b.deadline||'2999-01-01'));
-    for(const task of flex){
-      const old=effectiveStart(task,date); const pref=old?minutes(old):null;
-      const slot=findSlot(date,task.duration,occupied,pref);
-      if(slot==null) continue;
-      const next=timeFromMin(slot); state.scheduleOverrides[occurrenceKey(task,date)]=next;
-      occupied.push([slot,slot+task.duration,task.id]);
-      if(old!==next) changes.push({task:task.title,from:old||'sem horário',to:next});
-    }
-    if(changes.length){ state.aiLog.unshift({date:Date.now(),text:`${reason}: ${changes.map(c=>`${c.task} ${c.from} → ${c.to}`).join('; ')}`}); }
-    save(); return changes;
-  }
-
-  function detectFixedConflicts(date){ const fixed=state.tasks.filter(t=>taskDateEligible(t,date)&&t.fixed&&effectiveStart(t,date)).map(t=>({...t,start:effectiveStart(t,date)})); const out=[]; for(let i=0;i<fixed.length;i++)for(let j=i+1;j<fixed.length;j++){const a=fixed[i],b=fixed[j],as=minutes(a.start),bs=minutes(b.start);if(as+a.duration>bs&&bs+b.duration>as)out.push([a,b]);} return out; }
-
-  function addTask(data){
-    const task={id:uid('task'),title:data.title.trim(),date:data.date||currentDate,duration:Number(data.duration)||45,start:data.start||'',fixed:!!data.fixed,priority:Number(data.priority)||2,category:data.category||'pessoal',deadline:data.deadline||'',goalId:data.goalId||null,xp:Number(data.xp)||30,recurrence:data.recurrenceDays?.length?{days:data.recurrenceDays}:null,notes:data.notes||''};
-    state.tasks.push(task);
-    let changes=[];
-    if(state.settings.autoOptimize) changes=optimizeDay(task.date, task.fixed?'Novo compromisso fixo':'Nova tarefa'); else save();
-    const fixedConflicts=detectFixedConflicts(task.date); if(fixedConflicts.length) state.aiLog.unshift({date:Date.now(),text:`Conflito entre compromissos fixos: ${fixedConflicts.map(x=>x[0].title+' × '+x[1].title).join('; ')}. Requer decisão manual.`}); save();
-    toast(fixedConflicts.length?'Compromissos fixos em conflito — confira a agenda.':changes.length?`Agenda otimizada · ${changes.length} ajuste(s)`:'Tarefa adicionada.');
+  function upsertTask(data, existingId = null) {
+    const existing = state.tasks.find((task) => task.id === existingId);
+    const task = {
+      id: existing?.id || uid('task'),
+      title: String(data.title || '').trim(),
+      date: data.date || state.selectedDate || localISO(),
+      time: data.time || '',
+      duration: Math.max(5, Number(data.duration) || Number(state.settings.defaultDuration) || 60),
+      recurrence: data.recurrence || 'none',
+      goalId: data.goalId || '',
+      notes: String(data.notes || '').trim(),
+      createdAt: existing?.createdAt || Date.now(),
+      completedAt: existing?.completedAt || null,
+      completions: existing?.completions || {}
+    };
+    if (!task.title) return null;
+    if (existing) Object.assign(existing, task);
+    else state.tasks.push(task);
+    save();
     render();
     return task;
   }
 
-  function deleteTask(id){ state.tasks=state.tasks.filter(t=>t.id!==id); save(); render(); }
-
-  function addFinance(data){
-    state.finance.push({id:uid('fin'),date:data.date||todayISO(),label:data.label||'Movimento',amount:Number(data.amount)||0,type:data.type||'income'});save();render();toast('Financeiro atualizado.');
+  function upsertGoal(data, existingId = null) {
+    const existing = state.goals.find((goal) => goal.id === existingId);
+    const goal = {
+      id: existing?.id || uid('goal'),
+      title: String(data.title || '').trim(),
+      target: Math.max(0, Number(data.target) || 0),
+      current: Math.max(0, Number(data.current) || 0),
+      unit: String(data.unit || 'unid.').trim(),
+      deadline: data.deadline || addDays(localISO(), 90),
+      note: String(data.note || '').trim()
+    };
+    if (!goal.title || !goal.target) return null;
+    if (existing) Object.assign(existing, goal);
+    else state.goals.push(goal);
+    save();
+    render();
+    return goal;
   }
 
-  function setView(view){ state.currentView=view; save(); render(); requestAnimationFrame(()=>$('#viewRoot')?.focus()); }
+  const navItems = [
+    { id: 'today', icon: '◷', label: 'Hoje' },
+    { id: 'upcoming', icon: '▤', label: 'Em breve' },
+    { id: 'goals', icon: '◎', label: 'Metas' }
+  ];
 
-  function renderNav(){
-    $('#railNav').innerHTML=navItems.map(([id,icon,label])=>`<button class="rail-btn ${state.currentView===id?'active':''}" data-view="${id}" title="${label}">${icon}</button>`).join('');
-    $('#bottomDock').innerHTML=navItems.map(([id,icon,label])=>`<button class="dock-btn ${state.currentView===id?'active':''}" data-view="${id}" title="${label}">${icon}</button>`).join('');
+  function setView(view) {
+    if (!navItems.some((item) => item.id === view)) return;
+    state.view = view;
+    if (view === 'today' && !state.selectedDate) state.selectedDate = localISO();
+    save();
+    render();
+    requestAnimationFrame(() => $('#viewRoot')?.focus());
   }
 
-  function header(title,subtitle,eyebrow='',actions=''){
-    return `<div class="view-header"><div><div class="eyebrow">${esc(eyebrow)}</div><h1 class="view-title">${esc(title)}</h1><div class="view-subtitle">${esc(subtitle)}</div></div>${actions?`<div class="header-actions">${actions}</div>`:''}</div>`;
+  function renderNav() {
+    $('#bottomDock').innerHTML = navItems.map((item) => `
+      <button class="dock-button ${state.view === item.id ? 'active' : ''}" data-view="${item.id}" type="button">
+        <span class="dock-icon">${item.icon}</span>
+        <span>${item.label}</span>
+      </button>
+    `).join('');
   }
-  function metric(label,value,sub=''){ return `<div class="metric-card"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-sub">${esc(sub)}</div></div>`; }
-  function progress(value,left,right){ return `<div class="progress-track"><div class="progress-fill" style="width:${clamp(value,0,1)*100}%"></div></div><div class="progress-meta"><span>${esc(left)}</span><span>${esc(right)}</span></div>`; }
 
-  function renderToday(){
-    const tasks=getTasksForDate(currentDate); const p=todayProgress();
-    const next=tasks.find(t=>!isDone(t,currentDate)&&minutes(t.start)>=minutes(new Date().toTimeString().slice(0,5))) || tasks.find(t=>!isDone(t,currentDate));
-    const upcoming=next?`${next.start||'—'} · ${next.title}`:'Tudo concluído';
-    return `<div class="view-enter">
-      ${header('Hoje','Seu dia, reorganizado em tempo real pela IA.',fmtDate(currentDate),`<button class="soft-btn" data-action="prevDay">‹</button><button class="soft-btn" data-action="todayNow">Hoje</button><button class="soft-btn" data-action="nextDay">›</button><button class="primary-btn" data-action="addTask">+ Adicionar</button>`)}
-      <div class="metrics-grid">
-        ${metric('PROGRESSO DO DIA',`${Math.round(p*100)}%`,`${tasks.filter(t=>isDone(t,currentDate)).length} de ${tasks.length} concluídos`)}
-        ${metric('STREAK',`${state.profile.streak} dias`,'sequência atual')}
-        ${metric('XP HOJE',`+${xpToday()}`,`nível ${state.profile.level} · ${state.profile.xp} XP`)}
-        ${metric('PRÓXIMO',next?.start||'—',next?.title||'sem pendências')}
+  function viewHead(eyebrow, title, subtitle, actions = '') {
+    return `
+      <header class="view-head">
+        <div>
+          <div class="eyebrow">${esc(eyebrow)}</div>
+          <h1 class="view-title">${esc(title)}</h1>
+          <p class="view-subtitle">${esc(subtitle)}</p>
+        </div>
+        <div class="head-actions">${actions}</div>
+      </header>
+    `;
+  }
+
+  function renderDayStrip() {
+    const start = addDays(state.selectedDate, -3);
+    const formatter = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' });
+    const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
+    return `
+      <div class="day-toolbar">
+        <button class="date-button" data-action="previousDay" type="button" aria-label="Dia anterior">‹</button>
+        <div class="day-strip">
+          ${days.map((date) => {
+            const hasTask = tasksForDate(date, { includeCompleted: false }).length > 0;
+            return `
+              <button class="day-pill ${date === state.selectedDate ? 'active' : ''} ${hasTask ? 'has-task' : ''}" data-action="selectDate" data-date="${date}" type="button">
+                <span>${esc(formatter.format(parseISO(date)).replace('.', ''))}</span>
+                <strong>${parseISO(date).getDate()}</strong>
+              </button>
+            `;
+          }).join('')}
+        </div>
+        <button class="date-button" data-action="nextDay" type="button" aria-label="Próximo dia">›</button>
       </div>
-      <div class="grid-2">
-        <section class="panel hoverable"><div class="panel-title">Linha do dia</div><div class="panel-sub">Fixos não são movidos. Flexíveis são ajustados automaticamente.</div>
-          <div class="timeline">${tasks.length?tasks.map(t=>`<div class="timeline-row ${isDone(t,currentDate)?'done':''} ${t.fixed?'fixed':''}"><div class="time">${esc(t.start||'—')}</div><div class="timeline-dot"></div><div><div class="task-name">${esc(t.title)}</div><div class="task-meta">${t.fixed?'Fixo':'Flexível'} · ${t.duration} min · ${esc(t.category)}</div></div><div class="task-actions"><button class="check-btn" data-action="toggleTask" data-id="${t.id}" title="Concluir">${isDone(t,currentDate)?'✓':'○'}</button><button class="check-btn" data-action="editTask" data-id="${t.id}" title="Editar">⋯</button></div></div>`).join(''):`<div class="empty">Nenhuma atividade neste dia.</div>`}</div>
-        </section>
-        <div class="section-stack">
-          <section class="panel hoverable"><div class="panel-title">Meta em foco</div>${goalMini(state.goals[0])}</section>
-          <section class="panel hoverable"><div class="panel-title">Consistência · 14 dias</div>${consistencyBars()}<div class="metric-sub">atividade recente calculada pelas conclusões registradas</div></section>
-          <section class="panel hoverable"><div class="panel-title">Ações rápidas</div><div class="quick-row"><button class="soft-btn" data-action="optimize">Otimizar dia</button><button class="soft-btn" data-action="addMeeting">Reunião</button><button class="soft-btn" data-view="goals">Metas</button><button class="soft-btn" data-view="finance">Financeiro</button></div></section>
+    `;
+  }
+
+  function taskCard(task, date, { overdue = false, completed = false } = {}) {
+    const goal = goalById(task.goalId);
+    const recurrence = recurrenceLabel(task.recurrence);
+    const taskDate = overdue ? formatShortDate(task.date) : '';
+    const time = task.time || 'sem horário';
+    return `
+      <article class="task-card ${overdue ? 'overdue' : ''} ${completed ? 'completed' : ''}" data-task-id="${task.id}">
+        <button class="task-check" data-action="toggleTask" data-id="${task.id}" data-date="${date}" type="button" aria-label="${completed ? 'Desfazer conclusão' : 'Concluir tarefa'}">${completed ? '✓' : '✓'}</button>
+        <div class="task-copy">
+          <div class="task-title">${esc(task.title)}</div>
+          <div class="task-meta">
+            <span class="time-accent">${taskDate ? `${esc(taskDate)} · ` : ''}${esc(time)}</span>
+            <span>· ${esc(formatDuration(task.duration))}</span>
+            ${recurrence ? `<span>↻ ${esc(recurrence)}</span>` : ''}
+            ${goal ? `<span class="goal-link"># ${esc(goal.title)}</span>` : ''}
+          </div>
+        </div>
+        <button class="task-menu" data-action="editTask" data-id="${task.id}" type="button" aria-label="Editar tarefa">•••</button>
+      </article>
+    `;
+  }
+
+  function completedDrawer(completed, date) {
+    if (!completed.length) return '';
+    return `
+      <section class="completed-drawer" id="completedDrawer">
+        <button class="completed-toggle" data-action="toggleCompletedDrawer" type="button">▸ ${completed.length} concluída${completed.length === 1 ? '' : 's'} — toque para ver</button>
+        <div class="completed-list">
+          ${completed.map((task) => taskCard(task, date, { completed: true })).join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  function emptyTasks(date) {
+    return `
+      <div class="empty-state">
+        <div>
+          <div class="empty-orb">✦</div>
+          <strong>Nenhuma tarefa em ${esc(formatDayLabel(date).toLowerCase())}</strong>
+          <p>Adicione pelo botão abaixo ou peça ao assistente: “crie uma tarefa amanhã às 15h”.</p>
+          <button class="primary-button" data-action="addTask" type="button">+ Adicionar tarefa</button>
         </div>
       </div>
-    </div>`;
+    `;
   }
 
-  function consistencyBars(){
-    const days=Array.from({length:14},(_,i)=>addDays(todayISO(),i-13));
-    const vals=days.map(d=>{const t=getTasksForDate(d);return t.length?t.filter(x=>isDone(x,d)).length/t.length:0;});
-    return `<div style="display:grid;grid-template-columns:repeat(14,1fr);gap:6px;height:78px;align-items:end">${vals.map(v=>`<div style="height:${Math.max(8,v*74)}px;border-radius:8px;background:rgba(255,255,255,${.08+v*.55})"></div>`).join('')}</div>`;
+  function renderToday() {
+    const all = tasksForDate(state.selectedDate);
+    const pending = all.filter((task) => !isTaskDone(task, state.selectedDate));
+    const completed = all.filter((task) => isTaskDone(task, state.selectedDate));
+    const overdue = state.selectedDate === localISO() ? overdueTasks() : [];
+    const totalMinutes = pending.reduce((sum, task) => sum + (Number(task.duration) || 0), 0);
+    const subtitle = state.selectedDate === localISO()
+      ? formatLongDate(state.selectedDate)
+      : `${formatDayLabel(state.selectedDate)} · ${formatLongDate(state.selectedDate)}`;
+
+    return `
+      <div class="view-enter">
+        ${viewHead('Tarefas', formatDayLabel(state.selectedDate), subtitle, `
+          ${state.selectedDate !== localISO() ? '<button class="soft-button" data-action="todayNow" type="button">Hoje</button>' : ''}
+          <button class="primary-button" data-action="addTask" type="button">+ <span>Tarefa</span></button>
+        `)}
+        ${renderDayStrip()}
+
+        ${overdue.length ? `
+          <div class="summary-row">
+            <div class="summary-copy"><strong>Atrasadas</strong><span>${overdue.length}</span></div>
+            <div class="summary-actions"><button class="chip-button" data-action="moveOverdueToday" type="button">Reagendar para hoje</button></div>
+          </div>
+          <div class="task-list">${overdue.map((task) => taskCard(task, task.date, { overdue: true })).join('')}</div>
+        ` : ''}
+
+        <div class="summary-row">
+          <div class="summary-copy">
+            <strong>${pending.length ? `${pending.length} tarefa${pending.length === 1 ? '' : 's'}` : 'Dia livre'}</strong>
+            <span>${pending.length ? esc(formatDuration(totalMinutes)) : 'sem pendências'}</span>
+          </div>
+          <div class="summary-actions">
+            <button class="chip-button" data-view="upcoming" type="button">Ver próximos dias</button>
+          </div>
+        </div>
+
+        ${pending.length ? `<div class="task-list">${pending.map((task) => taskCard(task, state.selectedDate)).join('')}</div>` : emptyTasks(state.selectedDate)}
+        ${completedDrawer(completed, state.selectedDate)}
+      </div>
+    `;
   }
 
-  function goalMini(g){ const c=goalCurrent(g),p=goalProgress(g);return `<div style="font-size:19px;font-weight:650;margin-bottom:14px">${esc(g.title)}</div>${progress(p,formatGoalValue(g,c),formatGoalValue(g,g.target))}`; }
-  function formatGoalValue(g,v){ if(g.unit==='R$')return `R$ ${Number(v).toLocaleString('pt-BR',{maximumFractionDigits:0})}`; return `${Number(v).toLocaleString('pt-BR')} ${g.unit}`; }
-
-  function renderWeek(){
-    const base=new Date(currentDate+'T12:00:00'); const dow=(base.getDay()+6)%7; const monday=addDays(currentDate,-dow); const days=Array.from({length:7},(_,i)=>addDays(monday,i));
-    const hours=[8,10,12,14,16,18,20];
-    return `<div class="view-enter">${header('Semana','Capacidade, compromissos e tarefas flexíveis em uma única visão.',`${fmtShort(days[0])} — ${fmtShort(days[6])}`,`<button class="primary-btn" data-action="addTask">+ Adicionar</button>`)}
-      <section class="panel"><div class="week-grid"><div class="week-head"></div>${days.map((d,i)=>`<div class="week-head">${['SEG','TER','QUA','QUI','SEX','SÁB','DOM'][i]}<strong>${new Date(d+'T12:00:00').getDate()}</strong></div>`).join('')}
-        ${hours.map(h=>`<div class="week-time">${String(h).padStart(2,'0')}:00</div>${days.map(d=>{const ev=getTasksForDate(d).filter(t=>{const m=minutes(t.start);return m>=h*60&&m<(h+2)*60;});return `<div class="week-cell">${ev.map(t=>`<div class="week-event ${t.fixed?'fixed':''}" data-action="editTask" data-id="${t.id}" data-date="${d}">${esc(t.start)} ${esc(t.title)}</div>`).join('')}</div>`}).join('')}`).join('')}
-      </div></section>
-      <div class="grid-equal" style="margin-top:14px"><section class="panel"><div class="panel-title">Carga semanal</div>${days.map(d=>{const min=getTasksForDate(d).reduce((a,t)=>a+t.duration,0);return `<div style="display:grid;grid-template-columns:42px 1fr 54px;gap:8px;align-items:center;margin:9px 0"><span class="metric-sub">${fmtShort(d)}</span><div class="progress-track"><div class="progress-fill" style="width:${clamp(min/(8*60),0,1)*100}%"></div></div><span class="metric-sub">${Math.round(min/60*10)/10}h</span></div>`}).join('')}</section><section class="panel"><div class="panel-title">IA · equilíbrio</div><p class="view-subtitle">Use “Otimizar semana” para reposicionar tarefas flexíveis em cada dia sem tocar nos compromissos fixos.</p><button class="primary-btn" data-action="optimizeWeek">Otimizar semana</button></section></div>
-    </div>`;
+  function renderUpcoming() {
+    const days = Array.from({ length: 14 }, (_, index) => addDays(localISO(), index));
+    return `
+      <div class="view-enter">
+        ${viewHead('Agenda', 'Em breve', 'Os próximos 14 dias em uma visão compacta.', '<button class="primary-button" data-action="addTask" type="button">+ <span>Tarefa</span></button>')}
+        <div class="upcoming-stack">
+          ${days.map((date) => {
+            const tasks = tasksForDate(date, { includeCompleted: false });
+            return `
+              <section class="upcoming-day">
+                <button class="upcoming-head" data-action="selectUpcomingDate" data-date="${date}" type="button" style="width:100%;border:0;background:transparent;color:inherit;padding:0;cursor:pointer">
+                  <strong>${esc(formatDayLabel(date))}</strong>
+                  <span>${esc(formatLongDate(date))} · ${tasks.length} tarefa${tasks.length === 1 ? '' : 's'}</span>
+                </button>
+                ${tasks.length ? `<div class="task-list">${tasks.map((task) => taskCard(task, date)).join('')}</div>` : '<div style="color:var(--faint);font-size:9px;padding:7px 1px 2px">Sem tarefas.</div>'}
+              </section>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
   }
 
-  function renderGoals(){
-    const currentWeek=clamp(Math.floor((new Date(todayISO()+'T12:00:00')-new Date((state.cycleStart||todayISO())+'T12:00:00'))/(7*86400000))+1,1,12);
-    return `<div class="view-enter">${header('Metas','Objetivos conectados a ações, ritmo e previsão.','Ciclo de 12 semanas',`<button class="primary-btn" data-action="addGoal">+ Nova meta</button>`)}
-      <section class="panel" style="margin-bottom:14px"><div class="panel-title">Ciclo atual · semana ${currentWeek} de 12</div><div class="week-cycle">${Array.from({length:12},(_,i)=>`<div class="week-node ${i<currentWeek?'on':''} ${i===currentWeek-1?'current':''}"></div>`).join('')}</div><div class="progress-meta"><span>Semana 1</span><span>58% do ciclo</span><span>Semana 12</span></div></section>
-      <div class="grid-equal">${state.goals.map(g=>`<section class="goal-card"><div class="goal-top"><div><div class="eyebrow">${esc(g.area)}</div><div class="goal-title">${esc(g.title)}</div></div><div class="goal-value">${Math.round(goalProgress(g)*100)}%</div></div>${progress(goalProgress(g),formatGoalValue(g,goalCurrent(g)),formatGoalValue(g,g.target))}<div class="goal-meta"><span>Prazo ${fmtShort(g.deadline)}</span><button class="soft-btn" data-action="editGoal" data-id="${g.id}">Detalhes</button></div></section>`).join('')}</div>
-      <div class="grid-equal" style="margin-top:14px"><section class="panel"><div class="panel-title">Ações que movem suas metas</div>${getTasksForDate(currentDate).filter(t=>t.goalId).slice(0,5).map(t=>`<div class="setting-row"><div class="setting-copy"><strong>${esc(t.title)}</strong><span>${esc(t.category)} · ${t.duration} min</span></div><span class="chip">${isDone(t,currentDate)?'concluído':'pendente'}</span></div>`).join('')||'<div class="empty">Sem ações ligadas às metas hoje.</div>'}</section><section class="panel"><div class="panel-title">Previsão</div><div class="metric-value">${state.goals.filter(g=>goalProgress(g)>=.5).length} de ${state.goals.length}</div><div class="view-subtitle">metas estão em ritmo razoável considerando o progresso registrado.</div><button class="primary-btn" data-action="optimize" style="margin-top:18px">Ajustar agenda pelo ciclo</button></section></div>
-    </div>`;
+  function deadlineInfo(goal) {
+    const remaining = dayDiff(localISO(), goal.deadline);
+    if (remaining < 0) return { label: `${Math.abs(remaining)} dias atrasada`, urgent: true };
+    if (remaining === 0) return { label: 'vence hoje', urgent: true };
+    if (remaining <= 14) return { label: `${remaining} dias restantes`, urgent: true };
+    return { label: `${remaining} dias restantes`, urgent: false };
   }
 
-  function financeSeries(days=30){
-    const arr=[]; let acc=0;
-    for(let i=days-1;i>=0;i--){const d=addDays(todayISO(),-i);acc+=state.finance.filter(x=>x.date===d&&x.type==='income').reduce((a,b)=>a+b.amount,0);arr.push({date:d,value:acc});}
-    return arr;
-  }
-  function chartSvg(series){
-    const w=760,h=250,pad=18,max=Math.max(1,...series.map(x=>x.value));
-    const pts=series.map((x,i)=>[pad+i*(w-pad*2)/(series.length-1||1),h-pad-(x.value/max)*(h-pad*2)]);
-    const path=pts.map((p,i)=>`${i?'L':'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
-    const area=`${path} L${pts.at(-1)[0]},${h-pad} L${pts[0][0]},${h-pad} Z`;
-    return `<div class="chart"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><defs><linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="white" stop-opacity=".15"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient></defs><g class="chart-grid"><line x1="18" y1="60" x2="742" y2="60"/><line x1="18" y1="125" x2="742" y2="125"/><line x1="18" y1="190" x2="742" y2="190"/></g><path d="${area}" class="chart-area"/><path d="${path}" class="chart-line"/>${pts.filter((_,i)=>i===pts.length-1).map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="4" class="chart-dot"/>`).join('')}<text x="18" y="242" class="chart-axis">${fmtShort(series[0].date)}</text><text x="710" y="242" class="chart-axis">${fmtShort(series.at(-1).date)}</text></svg></div>`;
-  }
-  function renderFinance(){
-    const s=financeSummary(); const goal=state.goals.find(g=>g.type==='finance')||state.goals[0]; const p=goalProgress(goal); const remaining=Math.max(0,goal.target-s.income); const required=Math.round(remaining/Math.max(1,30-new Date().getDate()));
-    return `<div class="view-enter">${header('Financeiro','Performance, ritmo da meta e histórico em uma única leitura.','Visão executiva',`<div class="segmented"><button class="seg-btn">7D</button><button class="seg-btn active">30D</button><button class="seg-btn">3M</button><button class="seg-btn">1A</button></div><button class="primary-btn" data-action="addFinance">+ Movimento</button>`)}
-      <div class="metrics-grid">${metric('RECEITA',`R$ ${s.income.toLocaleString('pt-BR')}`,'acumulado registrado')}${metric('LUCRO LÍQUIDO',`R$ ${s.profit.toLocaleString('pt-BR')}`,`${s.income?Math.round(s.profit/s.income*100):0}% de margem`)}${metric('DESPESAS',`R$ ${s.expense.toLocaleString('pt-BR')}`,'total registrado')}${metric('META MENSAL',`${Math.round(p*100)}%`,`faltam R$ ${remaining.toLocaleString('pt-BR')}`)}</div>
-      <div class="grid-2"><section class="panel"><div class="panel-title">Receita acumulada · 30 dias</div>${chartSvg(financeSeries(30))}</section><div class="section-stack"><section class="panel"><div class="panel-title">Ritmo da meta</div><div class="metric-value">R$ ${required.toLocaleString('pt-BR')}/dia</div><div class="view-subtitle">necessário a partir de hoje para atingir a meta configurada.</div>${progress(p,`${Math.round(p*100)}%`,`R$ ${goal.target.toLocaleString('pt-BR')}`)}</section><section class="panel"><div class="panel-title">Recentes</div><table class="data-table"><tbody>${[...state.finance].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5).map(x=>`<tr><td><strong>${esc(x.label)}</strong><div class="metric-sub">${fmtShort(x.date)}</div></td><td class="${x.type==='income'?'positive':'negative'}">${x.type==='income'?'+':'−'} R$ ${x.amount.toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table></section></div></div>
-    </div>`;
-  }
-
-  const areas = {
-    tiktok:{title:'TikTok',icon:'◒',desc:'Conteúdo, blocos, views e execução semanal.'},
-    russo:{title:'Russo',icon:'Я',desc:'Sessões, consistência, vocabulário e tarefas.'},
-    dieta:{title:'Dieta',icon:'◐',desc:'Refeições, consistência e metas diárias.'},
-    academia:{title:'Academia',icon:'⌁',desc:'Treinos, peso e progresso físico.'},
-    marketing:{title:'Marketing',icon:'↗',desc:'Campanhas, entregas e performance.'}
-  };
-  function renderAreas(){
-    return `<div class="view-enter">${header('Áreas','Cada módulo alimenta a agenda, as metas e o painel de controle.','Módulos conectados')}
-      <div class="area-grid">${Object.entries(areas).map(([id,a])=>`<div class="area-card" data-action="openArea" data-area="${id}"><div class="area-icon">${a.icon}</div><h3>${a.title}</h3><p>${a.desc}</p><div class="metric-sub" style="margin-top:18px">${completedCountCategory(id)} ações concluídas</div></div>`).join('')}</div>
-      <section class="panel" style="margin-top:14px"><div class="panel-title">Integração automática</div><div class="view-subtitle">Tarefas criadas dentro de qualquer área entram na agenda principal. Conclusões atualizam XP, histórico e metas relacionadas sem entrada duplicada.</div></section>
-    </div>`;
-  }
-  function areaGoal(area){ return state.goals.find(g=>g.area===area); }
-  function renderArea(area){
-    const a=areas[area]||areas.tiktok, tasks=state.tasks.filter(t=>t.category===area), goal=areaGoal(area);
-    if(area==='academia') return renderGymArea(a,tasks,goal);
-    if(area==='tiktok') return renderTikTokArea(a,tasks,goal);
-    if(area==='russo') return renderRussianArea(a,tasks,goal);
-    if(area==='dieta') return renderDietArea(a,tasks,goal);
-    return `<div class="view-enter">${header(a.title,a.desc,'Área',`<button class="soft-btn" data-view="areas">Voltar</button><button class="primary-btn" data-action="addTask" data-category="${area}">+ Tarefa</button>`)}<div class="metrics-grid">${metric('CONCLUÍDAS',String(completedCountCategory(area)),'histórico')}${metric('PENDENTES',String(tasks.filter(t=>!isDone(t,currentDate)).length),'tarefas cadastradas')}${metric('HOJE',String(getTasksForDate(currentDate).filter(t=>t.category===area).length),'na agenda')}${goal?metric('META',`${Math.round(goalProgress(goal)*100)}%`,goal.title):metric('META','—','sem meta vinculada')}</div><div class="grid-equal"><section class="panel"><div class="panel-title">Execução</div>${tasks.length?tasks.map(t=>`<div class="setting-row"><div class="setting-copy"><strong>${esc(t.title)}</strong><span>${t.duration} min · ${t.fixed?'fixo':'flexível'}</span></div><button class="soft-btn" data-action="editTask" data-id="${t.id}">Editar</button></div>`).join(''):'<div class="empty">Sem tarefas cadastradas.</div>'}</section><section class="panel"><div class="panel-title">IA · recomendação</div><p class="view-subtitle">As atividades desta área entram automaticamente na otimização diária e semanal conforme prioridade, duração e compromissos fixos.</p><button class="primary-btn" data-action="optimize">Otimizar hoje</button></section></div></div>`;
-  }
-  function renderGymArea(a,tasks,goal){ const weight=state.weights.at(-1)?.value||0;return `<div class="view-enter">${header('Academia','Treino de segunda a sábado conectado à agenda e à meta física.','Área',`<button class="soft-btn" data-view="areas">Voltar</button><button class="primary-btn" data-action="addWeight">+ Peso</button>`)}<div class="metrics-grid">${metric('PESO ATUAL',`${weight} kg`,'último registro')}${metric('META','60 kg',`${Math.round(weight/60*100)}% do alvo`)}${metric('TREINOS',String(completedCountCategory('academia')),'concluídos')}${metric('ROTINA','SEG — SÁB','recorrência ativa')}</div><div class="grid-equal"><section class="panel"><div class="panel-title">Progresso de peso</div>${chartSvg(state.weights.map(x=>({date:x.date,value:x.value})))}</section><section class="panel"><div class="panel-title">Rotina</div>${tasks.map(t=>`<div class="setting-row"><div class="setting-copy"><strong>${esc(t.title)}</strong><span>${t.recurrence?'recorrente':'pontual'} · ${t.duration} min</span></div><button class="soft-btn" data-action="editTask" data-id="${t.id}">Editar</button></div>`).join('')}</section></div></div>`; }
-  function renderTikTokArea(a,tasks,goal){ return `<div class="view-enter">${header('TikTok','Conteúdo e execução conectados às metas e ao calendário.','Área',`<button class="soft-btn" data-view="areas">Voltar</button><button class="primary-btn" data-action="addTask" data-category="tiktok">+ Entrega</button>`)}<div class="metrics-grid">${metric('BLOCO 1','Ativo','fase atual')}${metric('ENTREGAS',String(completedCountCategory('tiktok')),'concluídas')}${metric('META',goal?`${Math.round(goalProgress(goal)*100)}%`:'—',goal?.title||'sem meta')}${metric('HOJE',String(getTasksForDate(currentDate).filter(t=>t.category==='tiktok').length),'na agenda')}</div><div class="grid-equal"><section class="panel"><div class="panel-title">Bloco 1 · execução</div>${tasks.map(t=>`<div class="setting-row"><div class="setting-copy"><strong>${esc(t.title)}</strong><span>${t.duration} min · prioridade ${t.priority}</span></div><span class="chip">${effectiveStart(t,currentDate)||'flexível'}</span></div>`).join('')}</section><section class="panel"><div class="panel-title">Ritmo</div>${goal?progress(goalProgress(goal),formatGoalValue(goal,goalCurrent(goal)),formatGoalValue(goal,goal.target)):''}<p class="view-subtitle" style="margin-top:16px">A IA posiciona automaticamente as entregas em janelas livres sem mover compromissos fixos.</p></section></div></div>`; }
-  function renderRussianArea(a,tasks,goal){ return `<div class="view-enter">${header('Russo','Sessões, exercícios e consistência de estudo.','Área',`<button class="soft-btn" data-view="areas">Voltar</button><button class="primary-btn" data-action="addTask" data-category="russo">+ Sessão</button>`)}<div class="metrics-grid">${metric('SESSÕES',String(completedCountCategory('russo')),'concluídas')}${metric('STREAK',`${Math.max(1,Math.min(state.profile.streak,12))} dias`,'estudo')}${metric('META',goal?`${Math.round(goalProgress(goal)*100)}%`:'—',goal?.title||'sem meta')}${metric('HOJE',String(getTasksForDate(currentDate).filter(t=>t.category==='russo').length),'sessões')}</div><section class="panel"><div class="panel-title">Plano de estudo</div>${tasks.map(t=>`<div class="setting-row"><div class="setting-copy"><strong>${esc(t.title)}</strong><span>${t.duration} min · ${t.recurrence?'recorrente':'pontual'}</span></div><button class="soft-btn" data-action="editTask" data-id="${t.id}">Editar</button></div>`).join('')}</section></div>`; }
-  function renderDietArea(a,tasks,goal){ return `<div class="view-enter">${header('Dieta','Refeições e consistência integradas ao dia.','Área',`<button class="soft-btn" data-view="areas">Voltar</button><button class="primary-btn" data-action="addTask" data-category="dieta">+ Refeição</button>`)}<div class="metrics-grid">${metric('HOJE',`${getTasksForDate(currentDate).filter(t=>t.category==='dieta'&&isDone(t,currentDate)).length}/${getTasksForDate(currentDate).filter(t=>t.category==='dieta').length}`,'refeições')}${metric('CONSISTÊNCIA',`${Math.round(todayProgress()*100)}%`,'dia geral')}${metric('PESO',`${state.weights.at(-1)?.value||'—'} kg`,'registro atual')}${metric('ROTINA','Ativa','itens recorrentes')}</div><section class="panel"><div class="panel-title">Refeições</div>${tasks.map(t=>`<div class="setting-row"><div class="setting-copy"><strong>${esc(t.title)}</strong><span>${t.start||'sem horário'} · ${t.duration} min</span></div><button class="soft-btn" data-action="editTask" data-id="${t.id}">Editar</button></div>`).join('')}</section></div>`; }
-
-  function renderAchievements(){
-    const earned=[
-      {title:'Consistência',desc:'7 dias de sequência',on:state.profile.streak>=7},
-      {title:'Ritmo sólido',desc:'14 dias de sequência',on:state.profile.streak>=14},
-      {title:'Primeiros 10 treinos',desc:'10 sessões concluídas',on:completedCountCategory('academia')>=10},
-      {title:'Russo em movimento',desc:'10 sessões de estudo',on:completedCountCategory('russo')>=10},
-      {title:'Conteúdo consistente',desc:'10 entregas de TikTok',on:completedCountCategory('tiktok')>=10},
-      {title:'Meta financeira 50%',desc:'metade da meta mensal',on:goalProgress(state.goals.find(g=>g.type==='finance'))>=.5}
-    ];
-    return `<div class="view-enter">${header('Conquistas','Marcos relevantes, sem transformar o sistema em um jogo infantil.','Progressão',`<button class="soft-btn" data-view="control">Voltar</button>`)}<div class="area-grid">${earned.map(a=>`<div class="area-card" style="opacity:${a.on?1:.42}"><div class="area-icon">${a.on?'◇':'○'}</div><h3>${esc(a.title)}</h3><p>${esc(a.desc)}</p><div class="metric-sub" style="margin-top:18px">${a.on?'desbloqueada':'a conquistar'}</div></div>`).join('')}</div></div>`;
+  function goalCard(goal) {
+    const progress = goalProgress(goal);
+    const deadline = deadlineInfo(goal);
+    return `
+      <article class="goal-card">
+        <div class="goal-head">
+          <div class="goal-head-copy">
+            <div class="goal-title">${esc(goal.title)}</div>
+            <div class="goal-deadline">Prazo ${esc(formatShortDate(goal.deadline))}</div>
+          </div>
+          <div class="goal-percent">${Math.round(progress * 100)}%</div>
+        </div>
+        <div class="progress-track"><div class="progress-fill" style="width:${Math.round(progress * 100)}%"></div></div>
+        <div class="goal-values"><span>${esc(formatGoalValue(goal, goal.current))}</span><span>${esc(formatGoalValue(goal, goal.target))}</span></div>
+        <div class="goal-foot">
+          <span class="deadline-chip ${deadline.urgent ? 'urgent' : ''}">◷ ${esc(deadline.label)}</span>
+          <button class="chip-button" data-action="editGoal" data-id="${goal.id}" type="button">Atualizar</button>
+        </div>
+      </article>
+    `;
   }
 
-  function renderControl(){
-    const fs=financeSummary(), p=todayProgress(), topGoals=[...state.goals].sort((a,b)=>goalProgress(a)-goalProgress(b)).slice(0,3);
-    return `<div class="view-enter">${header('Controle','O que merece atenção agora, sem repetir os dashboards.','Visão executiva')}
-      <div class="metrics-grid">${metric('DIA',`${Math.round(p*100)}%`,'progresso atual')}${metric('FINANCEIRO',`R$ ${fs.profit.toLocaleString('pt-BR')}`,'lucro líquido registrado')}${metric('XP',String(state.profile.xp),`nível ${state.profile.level}`)}${metric('STREAK',`${state.profile.streak} dias`,'consistência geral')}</div>
-      <div class="grid-equal"><section class="panel"><div class="panel-title">Prioridades</div>${topGoals.map(g=>`<div class="setting-row"><div class="setting-copy"><strong>${esc(g.title)}</strong><span>${Math.round(goalProgress(g)*100)}% · prazo ${fmtShort(g.deadline)}</span></div><span class="chip ${goalProgress(g)<.4?'warning':''}">${goalProgress(g)<.4?'atenção':'em ritmo'}</span></div>`).join('')}</section><section class="panel"><div class="panel-title">Últimas decisões da IA</div>${state.aiLog.slice(0,5).map(x=>`<div class="setting-row"><div class="setting-copy"><strong>${new Date(x.date).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</strong><span>${esc(x.text)}</span></div></div>`).join('')}</section></div>
-      <div class="grid-equal" style="margin-top:14px"><section class="panel"><div class="panel-title">Agenda de hoje</div>${getTasksForDate(currentDate).slice(0,6).map(t=>`<div class="setting-row"><div class="setting-copy"><strong>${esc(t.start||'—')} · ${esc(t.title)}</strong><span>${t.fixed?'fixo':'flexível'} · ${isDone(t,currentDate)?'concluído':'pendente'}</span></div></div>`).join('')}</section><section class="panel"><div class="panel-title">Ações</div><div class="quick-row"><button class="primary-btn" data-action="optimize">Otimizar hoje</button><button class="soft-btn" data-action="addTask">Nova tarefa</button><button class="soft-btn" data-action="addFinance">Novo movimento</button><button class="soft-btn" data-action="command">Comando IA</button><button class="soft-btn" data-view="achievements">Conquistas</button></div></section></div>
-    </div>`;
+  function renderGoals() {
+    return `
+      <div class="view-enter">
+        ${viewHead('Direção', 'Metas', 'Alvos preservados; todo valor realizado começa em zero.', `
+          <button class="soft-button" data-action="resetGoalValues" type="button">Zerar realizados</button>
+          <button class="primary-button" data-action="addGoal" type="button">+ <span>Meta</span></button>
+        `)}
+        <div class="goals-grid">
+          ${state.goals.map(goalCard).join('')}
+        </div>
+      </div>
+    `;
   }
 
-  function renderContext(){
-    const layer=$('#contextLayer');
-    if(state.currentView==='today'){
-      const latest=state.aiLog[0]; const goal=state.goals[0];
-      layer.innerHTML=`<div class="context-card glass depth-4"><div class="eyebrow">IA</div><h3>Agenda inteligente</h3><p>${esc(latest?.text||'Seu dia está organizado.')}</p><div class="context-actions"><button class="primary-btn" data-action="optimize">Otimizar</button></div></div><div class="context-card glass depth-3"><div class="eyebrow">META EM FOCO</div><h3>${Math.round(goalProgress(goal)*100)}%</h3><p>${esc(goal.title)}</p></div>`;
-    } else if(state.currentView==='finance'){
-      const g=state.goals.find(x=>x.type==='finance'), p=goalProgress(g);
-      layer.innerHTML=`<div class="context-card glass depth-4"><div class="eyebrow">ANÁLISE IA</div><h3>${p>=.67?'Meta no caminho':'Ritmo insuficiente'}</h3><p>${p>=.67?'O ritmo registrado está próximo do necessário.':'A receita atual está abaixo do ritmo necessário para a meta.'}</p></div>`;
-    } else layer.innerHTML='';
+  function render() {
+    renderNav();
+    const views = { today: renderToday, upcoming: renderUpcoming, goals: renderGoals };
+    $('#viewRoot').innerHTML = (views[state.view] || renderToday)();
   }
 
-  function render(){
-    renderNav(); const root=$('#viewRoot'); let html='';
-    if(state.currentView==='today') html=renderToday();
-    else if(state.currentView==='week') html=renderWeek();
-    else if(state.currentView==='goals') html=renderGoals();
-    else if(state.currentView==='finance') html=renderFinance();
-    else if(state.currentView==='areas') html=renderAreas();
-    else if(state.currentView.startsWith('area:')) html=renderArea(state.currentView.split(':')[1]);
-    else if(state.currentView==='control') html=renderControl();
-    else if(state.currentView==='achievements') html=renderAchievements();
-    root.innerHTML=html; renderContext(); bindDynamic(); updateSpotify();
-  }
-
-  function bindDynamic(){
-    $$('[data-view]').forEach(el=>el.onclick=()=>setView(el.dataset.view));
-    $$('[data-action]').forEach(el=>{
-      el.onclick=(e)=>{e.stopPropagation();handleAction(el.dataset.action,el.dataset,el);};
+  function openModal(content, className = '') {
+    const layer = $('#modalLayer');
+    layer.classList.add('open');
+    layer.innerHTML = `<section class="modal glass ${className}" role="dialog" aria-modal="true">${content}</section>`;
+    requestAnimationFrame(() => {
+      const firstField = $('input:not([type="hidden"]),textarea,select', layer);
+      (firstField || $('button', layer))?.focus();
     });
   }
 
-  function handleAction(action,data,el){
-    if(action==='prevDay'){currentDate=addDays(currentDate,-1);render();}
-    if(action==='nextDay'){currentDate=addDays(currentDate,1);render();}
-    if(action==='todayNow'){currentDate=todayISO();render();}
-    if(action==='toggleTask')toggleTask(data.id,currentDate);
-    if(action==='addTask')openTaskModal(null,{category:data.category});
-    if(action==='addMeeting')openTaskModal(null,{fixed:true,title:'Reunião'});
-    if(action==='editTask')openTaskModal(state.tasks.find(t=>t.id===data.id),{date:data.date});
-    if(action==='optimize'){const c=optimizeDay(currentDate);toast(c.length?`${c.length} tarefa(s) reposicionada(s).`:'Seu dia já está otimizado.');render();}
-    if(action==='optimizeWeek'){const base=new Date(currentDate+'T12:00:00');const dow=(base.getDay()+6)%7;const m=addDays(currentDate,-dow);let total=0;for(let i=0;i<7;i++)total+=optimizeDay(addDays(m,i),'Otimização semanal').length;toast(`${total} ajuste(s) feitos na semana.`);render();}
-    if(action==='addGoal')openGoalModal();
-    if(action==='editGoal')openGoalModal(state.goals.find(g=>g.id===data.id));
-    if(action==='addFinance')openFinanceModal();
-    if(action==='openArea')setView(`area:${data.area}`);
-    if(action==='addWeight')openWeightModal();
-    if(action==='command')openCommand();
+  function closeModal() {
+    const layer = $('#modalLayer');
+    layer.classList.remove('open');
+    layer.innerHTML = '';
   }
 
-  function openModal(content,klass=''){
-    const layer=$('#modalLayer'); $('#viewRoot').classList.add('receded'); layer.className='modal-layer open'; layer.innerHTML=`<div class="modal glass depth-5 ${klass}">${content}</div>`;
-    $$('.modal-close',layer).forEach(b=>b.onclick=closeModal);
-    layer.onclick=e=>{if(e.target===layer)closeModal();};
-  }
-  function closeModal(){ $('#modalLayer').className='modal-layer'; $('#modalLayer').innerHTML=''; $('#viewRoot').classList.remove('receded'); }
-
-  function openTaskModal(task=null,preset={}){
-    const t=task||{}; const rec=t.recurrence?.days||[]; const selectedCat=preset.category||t.category||'pessoal';
-    openModal(`<div class="modal-head"><div><h2>${task?'Editar atividade':'Nova atividade'}</h2><p>A IA pode reposicionar itens flexíveis automaticamente.</p></div><button class="icon-btn modal-close" style="width:32px;height:32px">×</button></div>
-      <form id="taskForm"><div class="input-grid">
-      <div class="field full"><label>Título</label><input name="title" required value="${esc(preset.title||t.title||'')}" placeholder="O que precisa acontecer?" /></div>
-      <div class="field"><label>Data</label><input type="date" name="date" value="${esc(preset.date||t.date||currentDate)}" /></div>
-      <div class="field"><label>Horário</label><input type="time" name="start" value="${esc(t.start||'')}" /></div>
-      <div class="field"><label>Duração (min)</label><input type="number" min="5" step="5" name="duration" value="${t.duration||45}" /></div>
-      <div class="field"><label>Prioridade</label><select name="priority"><option value="1" ${t.priority===1?'selected':''}>Baixa</option><option value="2" ${!t.priority||t.priority===2?'selected':''}>Média</option><option value="3" ${t.priority===3?'selected':''}>Alta</option></select></div>
-      <div class="field"><label>Categoria</label><select name="category">${['pessoal','trabalho','tiktok','marketing','russo','dieta','academia'].map(c=>`<option value="${c}" ${selectedCat===c?'selected':''}>${c}</option>`).join('')}</select></div>
-      <div class="field"><label>Prazo</label><input type="date" name="deadline" value="${esc(t.deadline||'')}" /></div>
-      <div class="field"><label>Tipo</label><select name="fixed"><option value="0" ${!t.fixed&&!preset.fixed?'selected':''}>Flexível</option><option value="1" ${t.fixed||preset.fixed?'selected':''}>Fixo</option></select></div>
-      <div class="field full"><label>Recorrência</label><div class="quick-row">${[['D',0],['S',1],['T',2],['Q',3],['Q',4],['S',5],['S',6]].map(([l,d])=>`<label class="chip"><input type="checkbox" name="rec" value="${d}" ${rec.includes(d)?'checked':''}/> ${l}</label>`).join('')}</div></div>
-      <div class="field full"><label>Notas</label><textarea name="notes">${esc(t.notes||'')}</textarea></div></div>
-      <div class="modal-actions">${task?`<button type="button" class="danger-btn" id="deleteTaskBtn">Excluir</button>`:''}<button type="button" class="soft-btn modal-close">Cancelar</button><button class="primary-btn" type="submit">${task?'Salvar':'Adicionar'}</button></div></form>`);
-    $('#taskForm').onsubmit=e=>{
-      e.preventDefault(); const f=new FormData(e.currentTarget); const d=Object.fromEntries(f.entries()); d.fixed=d.fixed==='1'; d.recurrenceDays=$$('input[name=rec]:checked',e.currentTarget).map(x=>Number(x.value));
-      if(task){ Object.assign(task,{title:d.title,date:d.date,start:d.start,duration:Number(d.duration),priority:Number(d.priority),category:d.category,deadline:d.deadline,fixed:d.fixed,recurrence:d.recurrenceDays.length?{days:d.recurrenceDays}:null,notes:d.notes}); if(state.settings.autoOptimize)optimizeDay(d.date,'Atividade alterada'); else save();toast('Atividade atualizada.');render(); }
-      else addTask(d);
+  function taskModal(taskId = null, presetDate = null) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    const date = presetDate || task?.date || state.selectedDate || localISO();
+    openModal(`
+      <div class="modal-head">
+        <div><h2>${task ? 'Editar tarefa' : 'Nova tarefa'}</h2><p>Tudo é salvo automaticamente quando você confirma.</p></div>
+        <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <form id="taskForm">
+        <div class="input-grid">
+          <div class="field full"><label>Tarefa</label><input name="title" required maxlength="120" value="${esc(task?.title || '')}" placeholder="O que precisa ser feito?" /></div>
+          <div class="field"><label>Data</label><input name="date" type="date" required value="${esc(date)}" /></div>
+          <div class="field"><label>Horário</label><input name="time" type="time" value="${esc(task?.time || '')}" /></div>
+          <div class="field"><label>Duração</label><input name="duration" type="number" min="5" step="5" value="${esc(task?.duration || state.settings.defaultDuration)}" /></div>
+          <div class="field"><label>Repetição</label><select name="recurrence">
+            <option value="none" ${(task?.recurrence || 'none') === 'none' ? 'selected' : ''}>Não repetir</option>
+            <option value="daily" ${task?.recurrence === 'daily' ? 'selected' : ''}>Todo dia</option>
+            <option value="weekdays" ${task?.recurrence === 'weekdays' ? 'selected' : ''}>Segunda a sexta</option>
+            <option value="weekly" ${task?.recurrence === 'weekly' ? 'selected' : ''}>Toda semana</option>
+          </select></div>
+          <div class="field full"><label>Meta vinculada</label><select name="goalId"><option value="">Nenhuma</option>${state.goals.map((goal) => `<option value="${goal.id}" ${task?.goalId === goal.id ? 'selected' : ''}>${esc(goal.title)}</option>`).join('')}</select></div>
+          <div class="field full"><label>Observação</label><textarea name="notes" placeholder="Opcional">${esc(task?.notes || '')}</textarea></div>
+        </div>
+        <div class="modal-actions">
+          ${task ? '<button class="danger-button" id="deleteTaskBtn" type="button">Excluir</button>' : ''}
+          <button class="soft-button modal-close" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Salvar tarefa</button>
+        </div>
+      </form>
+    `);
+    $('#taskForm').onsubmit = (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const result = upsertTask(data, task?.id || null);
+      if (!result) return;
       closeModal();
+      toast(task ? 'Tarefa atualizada.' : 'Tarefa adicionada.');
     };
-    if(task)$('#deleteTaskBtn').onclick=()=>{deleteTask(task.id);closeModal();toast('Atividade excluída.');};
-  }
-
-  function openGoalModal(g=null){
-    openModal(`<div class="modal-head"><div><h2>${g?'Editar meta':'Nova meta'}</h2><p>Metas podem ser manuais, financeiras ou alimentadas por tarefas.</p></div><button class="icon-btn modal-close" style="width:32px;height:32px">×</button></div><form id="goalForm"><div class="input-grid"><div class="field full"><label>Título</label><input name="title" required value="${esc(g?.title||'')}"/></div><div class="field"><label>Tipo</label><select name="type"><option value="manual" ${g?.type==='manual'?'selected':''}>Manual</option><option value="taskCount" ${g?.type==='taskCount'?'selected':''}>Contagem de tarefas</option><option value="finance" ${g?.type==='finance'?'selected':''}>Financeira</option></select></div><div class="field"><label>Área</label><select name="area">${['pessoal','financeiro','tiktok','russo','academia','marketing'].map(a=>`<option ${g?.area===a?'selected':''}>${a}</option>`).join('')}</select></div><div class="field"><label>Meta</label><input name="target" type="number" step="0.1" value="${g?.target||100}"/></div><div class="field"><label>Atual (manual)</label><input name="manualCurrent" type="number" step="0.1" value="${g?.manualCurrent??0}"/></div><div class="field"><label>Unidade</label><input name="unit" value="${esc(g?.unit||'unid.')}"/></div><div class="field"><label>Prazo</label><input name="deadline" type="date" value="${g?.deadline||addDays(todayISO(),84)}"/></div><div class="field full"><label>Categoria vinculada</label><select name="category"><option value="">Nenhuma</option>${['tiktok','marketing','russo','dieta','academia'].map(a=>`<option value="${a}" ${g?.category===a?'selected':''}>${a}</option>`).join('')}</select></div></div><div class="modal-actions"><button type="button" class="soft-btn modal-close">Cancelar</button><button class="primary-btn">Salvar</button></div></form>`);
-    $('#goalForm').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries()); const obj={id:g?.id||uid('goal'),title:d.title,type:d.type,area:d.area,target:Number(d.target),manualCurrent:Number(d.manualCurrent),unit:d.unit,deadline:d.deadline,category:d.category||null}; if(g)Object.assign(g,obj);else state.goals.push(obj);save();closeModal();render();toast('Meta salva.');};
-  }
-  function openFinanceModal(){
-    openModal(`<div class="modal-head"><div><h2>Novo movimento</h2><p>Atualiza automaticamente o dashboard e as metas financeiras.</p></div><button class="icon-btn modal-close" style="width:32px;height:32px">×</button></div><form id="financeForm"><div class="input-grid"><div class="field full"><label>Descrição</label><input name="label" required placeholder="Ex.: Venda Produto A"/></div><div class="field"><label>Valor</label><input name="amount" type="number" step="0.01" required/></div><div class="field"><label>Tipo</label><select name="type"><option value="income">Receita</option><option value="expense">Despesa</option></select></div><div class="field"><label>Data</label><input name="date" type="date" value="${todayISO()}"/></div></div><div class="modal-actions"><button type="button" class="soft-btn modal-close">Cancelar</button><button class="primary-btn">Adicionar</button></div></form>`);
-    $('#financeForm').onsubmit=e=>{e.preventDefault();addFinance(Object.fromEntries(new FormData(e.currentTarget).entries()));closeModal();};
-  }
-  function openWeightModal(){
-    openModal(`<div class="modal-head"><div><h2>Registrar peso</h2><p>Atualiza a área Academia e a meta física.</p></div><button class="icon-btn modal-close" style="width:32px;height:32px">×</button></div><form id="weightForm"><div class="input-grid"><div class="field"><label>Peso (kg)</label><input name="value" type="number" step="0.1" value="${state.weights.at(-1)?.value||''}"/></div><div class="field"><label>Data</label><input name="date" type="date" value="${todayISO()}"/></div></div><div class="modal-actions"><button type="button" class="soft-btn modal-close">Cancelar</button><button class="primary-btn">Salvar</button></div></form>`);
-    $('#weightForm').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries());state.weights.push({date:d.date,value:Number(d.value)});const g=state.goals.find(x=>x.type==='manual'&&x.unit==='kg');if(g)g.manualCurrent=Number(d.value);save();closeModal();render();toast('Peso registrado.');};
-  }
-
-  function openSettings(){
-    openModal(`<div class="modal-head"><div><h2>Configurações</h2><p>Preferências do sistema local.</p></div><button class="icon-btn modal-close" style="width:32px;height:32px">×</button></div><div class="setting-row"><div class="setting-copy"><strong>Otimização automática</strong><span>Reorganiza tarefas flexíveis após mudanças no calendário.</span></div><input class="toggle" id="autoOptimizeToggle" type="checkbox" ${state.settings.autoOptimize?'checked':''}></div><div class="setting-row"><div class="setting-copy"><strong>Spotify</strong><span>Cole uma URL de embed do Spotify para abrir no widget.</span></div><button class="soft-btn" id="spotifySettings">Configurar</button></div><div class="setting-row"><div class="setting-copy"><strong>Backup</strong><span>Exporte ou importe todos os seus dados em JSON.</span></div><div><button class="soft-btn" id="exportBtn">Exportar</button> <button class="soft-btn" id="importBtn">Importar</button><input id="importFile" type="file" accept="application/json" hidden></div></div><div class="setting-row"><div class="setting-copy"><strong>Dados locais</strong><span>As informações ficam no armazenamento deste navegador.</span></div><button class="danger-btn" id="resetBtn">Restaurar demo</button></div>`);
-    $('#autoOptimizeToggle').onchange=e=>{state.settings.autoOptimize=e.target.checked;save();toast(e.target.checked?'Otimização automática ativada.':'Otimização automática desativada.');};
-    $('#spotifySettings').onclick=()=>{const url=prompt('Cole a URL de embed do Spotify (https://open.spotify.com/embed/...):',state.settings.spotifyUrl||'');if(url!==null){state.settings.spotifyUrl=url.trim();save();updateSpotify();}};
-    $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`objetivos-backup-${todayISO()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('Backup exportado.');};
-    $('#importBtn').onclick=()=>$('#importFile').click();
-    $('#importFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const parsed=JSON.parse(await file.text());if(!parsed.tasks||!parsed.goals)throw new Error('invalid');state={...seed(),...parsed};save();closeModal();render();toast('Backup importado.');}catch{toast('Arquivo de backup inválido.');}};
-    $('#resetBtn').onclick=()=>{if(confirm('Restaurar todos os dados de demonstração?')){reset();closeModal();}};
-  }
-
-  function openCommand(){
-    openModal(`<div class="modal-head"><div><h2>Comando IA</h2><p>Escreva naturalmente. O sistema executa ações reconhecidas.</p></div><button class="icon-btn modal-close" style="width:32px;height:32px">×</button></div><input id="commandInput" class="command-input" placeholder="Ex.: Tenho uma reunião amanhã às 15h por 90 minutos" autocomplete="off"/><div class="command-hints"><button class="hint">Adicione academia amanhã às 18h</button><button class="hint">Tenho uma reunião amanhã às 15h por 90 minutos</button><button class="hint">Reorganize meu dia</button><button class="hint">Quanto falta para minha meta financeira?</button></div><div id="commandResult" class="command-result"></div>`, 'command-modal');
-    const input=$('#commandInput'); setTimeout(()=>input.focus(),80);
-    $$('.hint').forEach(h=>h.onclick=()=>{input.value=h.textContent;executeCommand(input.value);});
-    input.onkeydown=e=>{if(e.key==='Enter')executeCommand(input.value);};
-  }
-
-  function parseHour(txt){ const m=txt.match(/(?:às|as|@)\s*(\d{1,2})(?::(\d{2}))?\s*h?/i); if(!m)return'';return `${String(Number(m[1])).padStart(2,'0')}:${String(Number(m[2]||0)).padStart(2,'0')}`; }
-  function parseDuration(txt){ const m=txt.match(/por\s+(\d+)\s*(?:min|minutos?)/i); if(m)return Number(m[1]); const h=txt.match(/por\s+(\d+(?:[.,]\d+)?)\s*h/i); return h?Math.round(Number(h[1].replace(',','.'))*60):60; }
-  function executeCommand(raw){
-    const txt=raw.trim(); if(!txt)return; let msg='Não entendi essa ação ainda. Tente adicionar uma tarefa, reunião, otimizar o dia ou perguntar sobre a meta financeira.';
-    const lower=txt.toLowerCase(); const date=lower.includes('amanhã')||lower.includes('amanha')?addDays(todayISO(),1):lower.includes('hoje')?todayISO():currentDate;
-    if(/reorganiz|otimiz/.test(lower)){ const c=optimizeDay(date,'Comando de IA'); msg=c.length?`Pronto. Reorganizei ${c.length} tarefa(s) flexível(is) em ${fmtDate(date)}.`:'A agenda já estava organizada sem conflitos.'; render(); }
-    else if(/meta financeira|quanto falta/.test(lower)){const g=state.goals.find(x=>x.type==='finance'),cur=goalCurrent(g),left=Math.max(0,g.target-cur);msg=`A meta é ${formatGoalValue(g,g.target)}. Você registrou ${formatGoalValue(g,cur)} e faltam ${formatGoalValue(g,left)} (${Math.round(goalProgress(g)*100)}% concluído).`;}
-    else if(/reuni[aã]o/.test(lower)){
-      const start=parseHour(lower)||'15:00', duration=parseDuration(lower), title='Reunião'; addTask({title,date,start,duration,fixed:true,priority:3,category:'trabalho'});msg=`Reunião criada em ${fmtDate(date)}, ${start}, por ${duration} min. A agenda foi reanalisada automaticamente.`;
-    } else if(/adicione|adicionar|crie|coloque/.test(lower)){
-      const start=parseHour(lower); let title=txt.replace(/^(adicione|adicionar|crie|coloque)\s+/i,'').replace(/\s+(hoje|amanhã|amanha).*$/i,'').replace(/\s+às\s+.*$/i,'').trim(); if(!title)title='Nova tarefa'; const cat=/academia|treino/.test(lower)?'academia':/russo/.test(lower)?'russo':/tiktok/.test(lower)?'tiktok':'pessoal'; addTask({title,date,start,duration:60,fixed:!!start,priority:2,category:cat}); msg=`Adicionei “${title}” em ${fmtDate(date)}${start?` às ${start}`:''}.`;
+    if (task) {
+      $('#deleteTaskBtn').onclick = () => {
+        if (!confirm(`Excluir “${task.title}”?`)) return;
+        deleteTask(task.id);
+        closeModal();
+      };
     }
-    const box=$('#commandResult'); if(box){box.textContent=msg;box.classList.add('show');}
-    toast('Comando processado.');
   }
 
-  function updateSpotify(){
-    const status=$('#spotifyStatus'),btn=$('#spotifyToggle'); if(!status||!btn)return;
-    if(state.settings.spotifyUrl){status.textContent='embed configurado';btn.textContent='Abrir';} else {status.textContent='não conectado';btn.textContent='Conectar';}
-  }
-  function spotifyAction(){
-    if(state.settings.spotifyUrl){ openSpotifyModal(); }
-    else { const url=prompt('Cole a URL de embed do Spotify (https://open.spotify.com/embed/...):',''); if(url){state.settings.spotifyUrl=url.trim();save();updateSpotify();openSpotifyModal();} }
-  }
-  function openSpotifyModal(){
-    const url=state.settings.spotifyUrl;
-    openModal(`<div class="modal-head"><div><h2>Spotify</h2><p>Player flutuante integrado ao workspace.</p></div><button class="icon-btn modal-close" style="width:32px;height:32px">×</button></div>${url?`<iframe title="Spotify" style="border:0;border-radius:20px;width:100%;height:352px" src="${esc(url)}" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>`:`<div class="empty">Configure uma URL de embed do Spotify.</div>`}`);
+  function goalModal(goalId = null) {
+    const goal = state.goals.find((item) => item.id === goalId);
+    openModal(`
+      <div class="modal-head">
+        <div><h2>${goal ? 'Atualizar meta' : 'Nova meta'}</h2><p>Alvo, realizado e prazo — sem números demonstrativos.</p></div>
+        <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <form id="goalForm">
+        <div class="input-grid">
+          <div class="field full"><label>Meta</label><input name="title" required maxlength="120" value="${esc(goal?.title || '')}" placeholder="Ex.: US$ 10 mil por mês" /></div>
+          <div class="field"><label>Alvo</label><input name="target" type="number" min="0" step="0.01" required value="${esc(goal?.target ?? '')}" /></div>
+          <div class="field"><label>Realizado</label><input name="current" type="number" min="0" step="0.01" value="${esc(goal?.current ?? 0)}" /></div>
+          <div class="field"><label>Unidade</label><input name="unit" maxlength="20" value="${esc(goal?.unit || 'R$')}" placeholder="R$, US$, kg…" /></div>
+          <div class="field"><label>Prazo</label><input name="deadline" type="date" required value="${esc(goal?.deadline || addDays(localISO(), 90))}" /></div>
+          <div class="field full"><label>Observação</label><textarea name="note" placeholder="Opcional">${esc(goal?.note || '')}</textarea></div>
+        </div>
+        <div class="modal-actions">
+          ${goal ? '<button class="danger-button" id="deleteGoalBtn" type="button">Excluir</button>' : ''}
+          <button class="soft-button modal-close" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Salvar meta</button>
+        </div>
+      </form>
+    `);
+    $('#goalForm').onsubmit = (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const result = upsertGoal(data, goal?.id || null);
+      if (!result) return;
+      closeModal();
+      toast(goal ? 'Meta atualizada.' : 'Meta adicionada.');
+    };
+    if (goal) {
+      $('#deleteGoalBtn').onclick = () => {
+        if (!confirm(`Excluir a meta “${goal.title}”?`)) return;
+        state.goals = state.goals.filter((item) => item.id !== goal.id);
+        state.tasks.forEach((task) => { if (task.goalId === goal.id) task.goalId = ''; });
+        save();
+        render();
+        closeModal();
+        toast('Meta removida.');
+      };
+    }
   }
 
-  function toast(text){
-    const el=document.createElement('div');el.className='toast';el.textContent=text;$('#toastLayer').appendChild(el);setTimeout(()=>{el.style.opacity='0';el.style.transform='translateY(-8px)';setTimeout(()=>el.remove(),240)},2600);
+  function parseCommandDate(text, fallback = state.selectedDate || localISO()) {
+    const lower = normalize(text);
+    if (lower.includes('depois de amanha')) return addDays(localISO(), 2);
+    if (lower.includes('amanha')) return addDays(localISO(), 1);
+    if (lower.includes('hoje')) return localISO();
+    const dateMatch = lower.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
+    if (dateMatch) {
+      let year = Number(dateMatch[3] || new Date().getFullYear());
+      if (year < 100) year += 2000;
+      return `${year}-${String(Number(dateMatch[2])).padStart(2, '0')}-${String(Number(dateMatch[1])).padStart(2, '0')}`;
+    }
+    return fallback;
   }
 
-  function bindStatic(){
-    $('#commandBtn').onclick=openCommand; $('#settingsBtn').onclick=openSettings; $('#spotifyToggle').onclick=spotifyAction;
-    document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openCommand();} if(e.key==='Escape')closeModal();});
-    document.addEventListener('pointermove',e=>{
-      if(matchMedia('(max-width:760px)').matches)return;
-      const x=(e.clientX/window.innerWidth-.5), y=(e.clientY/window.innerHeight-.5);
-      document.documentElement.style.setProperty('--mx',x); document.documentElement.style.setProperty('--my',y);
-      const root=$('#viewRoot'); if(root&&!$('#modalLayer').classList.contains('open')) root.style.transform=`translateZ(18px) rotateX(${(-y*.65).toFixed(2)}deg) rotateY(${(x*.65).toFixed(2)}deg)`;
+  function parseCommandTime(text) {
+    const lower = normalize(text);
+    const match = lower.match(/(?:as|às|para)\s*(\d{1,2})(?::|h)?(\d{2})?\s*(?:h|horas?)?/);
+    if (!match) return '';
+    const hour = clamp(Number(match[1]), 0, 23);
+    const minute = clamp(Number(match[2] || 0), 0, 59);
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+
+  function parseCommandDuration(text) {
+    const lower = normalize(text);
+    const hourMatch = lower.match(/(?:por|duracao de)\s*(\d+(?:[.,]\d+)?)\s*h/);
+    if (hourMatch) return Math.max(5, Math.round(Number(hourMatch[1].replace(',', '.')) * 60));
+    const minuteMatch = lower.match(/(?:por|duracao de)\s*(\d+)\s*min/);
+    return minuteMatch ? Math.max(5, Number(minuteMatch[1])) : Number(state.settings.defaultDuration) || 60;
+  }
+
+  function parseAmount(text) {
+    const lower = normalize(text);
+    const candidates = [...lower.matchAll(/(\d+(?:[.,]\d+)?)\s*(milhao|milhoes|mil|mi|k)?\b/g)];
+    if (!candidates.length) return null;
+    const match = candidates.find((item) => !/\b(?:dia|mes|ano|hora|min)/.test(lower.slice(item.index + item[0].length, item.index + item[0].length + 8))) || candidates[0];
+    let value = Number(match[1].replace(',', '.'));
+    if (['mil', 'k'].includes(match[2])) value *= 1000;
+    if (['milhao', 'milhoes', 'mi'].includes(match[2])) value *= 1000000;
+    return value;
+  }
+
+  function findTaskInText(text, date = null) {
+    const lower = normalize(text);
+    const pool = date ? tasksForDate(date) : state.tasks;
+    return pool
+      .filter((task) => lower.includes(normalize(task.title)) || normalize(task.title).split(/\s+/).some((word) => word.length > 3 && lower.includes(word)))
+      .sort((a, b) => normalize(b.title).length - normalize(a.title).length)[0] || null;
+  }
+
+  function findGoalInText(text) {
+    const lower = normalize(text);
+    if (/1\s*(milhao|mi)/.test(lower)) return state.goals.find((goal) => goal.target === 1000000);
+    if (/100\s*(mil|k)/.test(lower)) return state.goals.find((goal) => goal.target === 100000);
+    if (/30\s*(mil|k)/.test(lower)) return state.goals.find((goal) => goal.target === 30000);
+    if (/10\s*(mil|k)/.test(lower)) return state.goals.find((goal) => goal.target === 10000);
+    return state.goals.find((goal) => lower.includes(normalize(goal.title))) || null;
+  }
+
+  function cleanTaskTitle(text) {
+    return String(text)
+      .replace(/^(adicione|adicionar|crie|criar|coloque|anote|nova tarefa|tarefa)\s+/i, '')
+      .replace(/\s+(hoje|amanhã|amanha|depois de amanhã|depois de amanha)\b.*$/i, '')
+      .replace(/\s+(às|as|para)\s+\d{1,2}(?::|h)?\d{0,2}\s*(?:h|horas?)?.*$/i, '')
+      .replace(/\s+por\s+\d+(?:[.,]\d+)?\s*(?:h|horas?|min|minutos?).*$/i, '')
+      .trim()
+      .replace(/[.!,;]+$/, '');
+  }
+
+  function executeCommand(raw) {
+    const text = String(raw || '').trim();
+    const lower = normalize(text);
+    if (!lower) return 'Escreva um pedido para eu executar.';
+
+    if (/(zer|reset|limp).*(valor|realiz|progresso).*(meta)|(?:meta).*(zer|reset|limp)/.test(lower)) {
+      state.goals.forEach((goal) => { goal.current = 0; });
+      save();
+      render();
+      return '<strong>Pronto.</strong> Zerei apenas os valores realizados. Alvos e prazos foram mantidos.';
+    }
+
+    if (/(mostrar|abrir|ver|ir para).*(amanha)|o que.*amanha/.test(lower)) {
+      state.selectedDate = addDays(localISO(), 1);
+      state.view = 'today';
+      save();
+      render();
+      const count = tasksForDate(state.selectedDate, { includeCompleted: false }).length;
+      return `<strong>Amanhã aberto.</strong> Há ${count} tarefa${count === 1 ? '' : 's'} pendente${count === 1 ? '' : 's'}.`;
+    }
+
+    if (/(conclu|finaliz|feito|terminei)/.test(lower)) {
+      const date = parseCommandDate(text);
+      const task = findTaskInText(text, date) || findTaskInText(text);
+      if (!task) return 'Não encontrei qual tarefa você quer concluir. Diga o nome dela.';
+      if (!isTaskDone(task, date)) toggleTask(task.id, date);
+      return `<strong>Concluída:</strong> ${esc(task.title)}. Ela saiu da lista principal e foi arquivada.`;
+    }
+
+    if (/(mova|mover|reagend|remarc)/.test(lower)) {
+      const task = findTaskInText(text);
+      if (!task) return 'Não encontrei a tarefa que você quer reagendar.';
+      task.date = parseCommandDate(text, task.date);
+      const time = parseCommandTime(text);
+      if (time) task.time = time;
+      task.completedAt = null;
+      save();
+      render();
+      return `<strong>Reagendada:</strong> ${esc(task.title)} para ${esc(formatLongDate(task.date))}${task.time ? ` às ${esc(task.time)}` : ''}.`;
+    }
+
+    if (/(atualiz|coloque|registre|fiz|bati).*(meta)|(?:meta).*(atualiz|coloque|registre)/.test(lower)) {
+      const goal = findGoalInText(text);
+      const value = parseAmount(text);
+      if (!goal || value == null) return 'Diga qual meta e o valor realizado. Ex.: “coloque 5 mil na meta de 30 mil”.';
+      goal.current = value;
+      save();
+      render();
+      return `<strong>Meta atualizada.</strong> ${esc(goal.title)} agora está em ${esc(formatGoalValue(goal, goal.current))}.`;
+    }
+
+    if (/(crie|criar|adicione|nova).*(meta)/.test(lower)) {
+      const target = parseAmount(text);
+      if (!target) return 'Qual é o valor-alvo da nova meta?';
+      const unit = /us\$|dolar|dolares/.test(lower) ? 'US$' : /r\$|reais|real/.test(lower) ? 'R$' : 'unid.';
+      const deadline = parseCommandDate(text, addDays(localISO(), 90));
+      const title = text.replace(/^(crie|criar|adicione|nova)\s+(uma\s+)?meta\s+(de\s+)?/i, '').replace(/\s+(até|ate)\s+.*$/i, '').trim() || `Meta de ${unit} ${target}`;
+      const goal = upsertGoal({ title, target, current: 0, unit, deadline, note: '' });
+      return goal ? `<strong>Meta criada:</strong> ${esc(goal.title)}, com prazo em ${esc(formatShortDate(goal.deadline))}.` : 'Não consegui criar a meta com esses dados.';
+    }
+
+    if (/(adicione|adicionar|crie|criar|coloque|anote|nova tarefa|tarefa)/.test(lower)) {
+      const date = parseCommandDate(text);
+      const time = parseCommandTime(text);
+      const duration = parseCommandDuration(text);
+      const title = cleanTaskTitle(text) || 'Nova tarefa';
+      const recurrence = /todo dia|diariamente/.test(lower) ? 'daily' : /segunda a sexta|seg a sex/.test(lower) ? 'weekdays' : /toda semana|semanal/.test(lower) ? 'weekly' : 'none';
+      const mentionedGoal = findGoalInText(text);
+      const task = upsertTask({ title, date, time, duration, recurrence, goalId: mentionedGoal?.id || '', notes: '' });
+      return task ? `<strong>Tarefa criada:</strong> ${esc(task.title)} em ${esc(formatLongDate(task.date))}${task.time ? ` às ${esc(task.time)}` : ''}.` : 'Não consegui identificar o nome da tarefa.';
+    }
+
+    if (/(o que|quais|liste|mostre).*(tarefa|tenho|agenda)/.test(lower)) {
+      const date = parseCommandDate(text);
+      const tasks = tasksForDate(date, { includeCompleted: false });
+      if (!tasks.length) return `Você não tem tarefas pendentes em ${esc(formatDayLabel(date).toLowerCase())}.`;
+      return `<strong>${esc(formatDayLabel(date))}:</strong> ${tasks.map((task) => esc(task.title)).join(' · ')}.`;
+    }
+
+    return 'Ainda não reconheci esse pedido. Posso criar, concluir ou reagendar tarefas; abrir amanhã; criar/atualizar metas; e zerar os valores realizados.';
+  }
+
+  function commandModal() {
+    openModal(`
+      <div class="modal-head">
+        <div><h2>Assistente</h2><p>Ele executa comandos sobre tarefas e metas — de verdade, sem botão decorativo.</p></div>
+        <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <input id="commandInput" class="command-input" placeholder="Ex.: adicione estudar russo amanhã às 10h" autocomplete="off" />
+      <div class="command-hints">
+        <button type="button">Mostre minhas tarefas de amanhã</button>
+        <button type="button">Adicione estudar russo amanhã às 10h</button>
+        <button type="button">Zere os valores realizados das metas</button>
+        <button type="button">Coloque 5 mil na meta de 30 mil</button>
+      </div>
+      <div id="commandResult" class="command-result">Peça algo e eu confirmo exatamente o que foi alterado.</div>
+    `, 'command-modal');
+    const input = $('#commandInput');
+    const run = () => {
+      const result = executeCommand(input.value);
+      $('#commandResult').innerHTML = result;
+      input.select();
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        run();
+      }
     });
-    document.addEventListener('pointerleave',()=>{const root=$('#viewRoot');if(root)root.style.transform='translateZ(18px)';});
-    if('serviceWorker' in navigator && location.protocol!=='file:') navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    $$('.command-hints button').forEach((button) => {
+      button.onclick = () => {
+        input.value = button.textContent;
+        run();
+      };
+    });
   }
 
-  window.__OBJETIVOS__={getState:()=>JSON.parse(JSON.stringify(state)),optimizeDay,addTask,toggleTask,financeSummary,goalProgress,setView,executeCommand,detectFixedConflicts,reset};
-  bindStatic(); render();
+  function exportBackup() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `objetivos-backup-${localISO()}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    toast('Backup exportado.');
+  }
+
+  function settingsModal() {
+    openModal(`
+      <div class="modal-head">
+        <div><h2>Configurações</h2><p>O app está limpo: somente tarefas e metas.</p></div>
+        <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <div class="settings-list">
+        <div class="setting-row">
+          <div class="setting-copy"><strong>Salvamento automático</strong><span>Cada tarefa, conclusão e alteração de meta é salva neste navegador imediatamente.</span></div>
+          <span class="deadline-chip">ativo</span>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy"><strong>Celular ↔ computador</strong><span>O armazenamento online ainda precisa ser conectado para sincronizar aparelhos diferentes.</span></div>
+          <button class="soft-button" id="cloudInfoBtn" type="button">Entender</button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy"><strong>Backup</strong><span>Leve todas as tarefas e metas em um arquivo JSON.</span></div>
+          <div><button class="soft-button" id="exportBtn" type="button">Exportar</button> <button class="soft-button" id="importBtn" type="button">Importar</button><input id="importFile" type="file" accept="application/json" hidden /></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy"><strong>Progresso das metas</strong><span>Zera somente o realizado; mantém alvos e prazos.</span></div>
+          <button class="danger-button" id="resetGoalsBtn" type="button">Zerar</button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy"><strong>Todas as tarefas</strong><span>Apaga tarefas pendentes, recorrências e histórico de conclusão.</span></div>
+          <button class="danger-button" id="clearTasksBtn" type="button">Apagar</button>
+        </div>
+      </div>
+    `);
+    $('#exportBtn').onclick = exportBackup;
+    $('#importBtn').onclick = () => $('#importFile').click();
+    $('#importFile').onchange = async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        const parsed = sanitizeState(JSON.parse(await file.text()));
+        state = parsed;
+        save();
+        render();
+        closeModal();
+        toast('Backup importado.');
+      } catch {
+        toast('Esse backup não é válido.');
+      }
+    };
+    $('#resetGoalsBtn').onclick = () => {
+      if (!confirm('Zerar todos os valores realizados sem alterar os alvos e prazos?')) return;
+      state.goals.forEach((goal) => { goal.current = 0; });
+      save();
+      render();
+      closeModal();
+      toast('Valores realizados zerados.');
+    };
+    $('#clearTasksBtn').onclick = () => {
+      if (!confirm('Apagar todas as tarefas e conclusões? Essa ação não altera as metas.')) return;
+      state.tasks = [];
+      save();
+      render();
+      closeModal();
+      toast('Todas as tarefas foram apagadas.');
+    };
+    $('#cloudInfoBtn').onclick = () => {
+      alert('Hoje o app salva automaticamente no aparelho. Para celular e PC compartilharem os mesmos dados, é necessário conectar um banco online com login. Nenhuma senha será colocada no código público.');
+    };
+  }
+
+  function resetGoalValues() {
+    if (!confirm('Zerar todos os valores realizados e manter alvos e prazos?')) return;
+    state.goals.forEach((goal) => { goal.current = 0; });
+    save();
+    render();
+    toast('Realizados zerados; metas preservadas.');
+  }
+
+  function moveOverdueToday() {
+    const overdue = overdueTasks();
+    overdue.forEach((task) => { task.date = localISO(); });
+    save();
+    render();
+    toast(`${overdue.length} tarefa${overdue.length === 1 ? '' : 's'} reagendada${overdue.length === 1 ? '' : 's'} para hoje.`);
+  }
+
+  document.addEventListener('click', (event) => {
+    const close = event.target.closest('.modal-close');
+    if (close) {
+      closeModal();
+      return;
+    }
+    if (event.target === $('#modalLayer')) {
+      closeModal();
+      return;
+    }
+    const viewButton = event.target.closest('[data-view]');
+    if (viewButton) {
+      setView(viewButton.dataset.view);
+      return;
+    }
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+    const { action, id, date } = actionButton.dataset;
+    const actions = {
+      addTask: () => taskModal(null, state.selectedDate),
+      addGoal: () => goalModal(),
+      editTask: () => taskModal(id),
+      editGoal: () => goalModal(id),
+      toggleTask: () => toggleTask(id, date || state.selectedDate),
+      previousDay: () => { state.selectedDate = addDays(state.selectedDate, -1); save(); render(); },
+      nextDay: () => { state.selectedDate = addDays(state.selectedDate, 1); save(); render(); },
+      todayNow: () => { state.selectedDate = localISO(); save(); render(); },
+      selectDate: () => { state.selectedDate = date; save(); render(); },
+      selectUpcomingDate: () => { state.selectedDate = date; state.view = 'today'; save(); render(); },
+      toggleCompletedDrawer: () => $('#completedDrawer')?.classList.toggle('open'),
+      resetGoalValues,
+      moveOverdueToday
+    };
+    actions[action]?.();
+  });
+
+  $('#commandBtn').onclick = commandModal;
+  $('#settingsBtn').onclick = settingsModal;
+  $('#quickAdd').onclick = () => taskModal(null, state.view === 'today' ? state.selectedDate : localISO());
+
+  window.addEventListener('storage', (event) => {
+    if (event.key !== STORAGE_KEY || !event.newValue) return;
+    try {
+      const incoming = sanitizeState(JSON.parse(event.newValue));
+      if ((incoming.revision || 0) <= (state.revision || 0)) return;
+      state = incoming;
+      render();
+      setSaveStatus('atualizado');
+    } catch {
+      // Ignore malformed external storage updates.
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  });
+  window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
+
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+
+  window.__OBJETIVOS__ = {
+    getState: () => JSON.parse(JSON.stringify(state)),
+    tasksForDate,
+    overdueTasks,
+    goalProgress,
+    toggleTask,
+    upsertTask,
+    upsertGoal,
+    executeCommand,
+    reset() {
+      state = freshState();
+      save();
+      render();
+    }
+  };
+
+  render();
 })();
