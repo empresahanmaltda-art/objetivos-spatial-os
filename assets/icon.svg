@@ -1,1 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="108" fill="#0b0b0c"/><g fill="none" stroke="#f5f5f7" stroke-linecap="round"><circle cx="256" cy="256" r="82" stroke-width="10" opacity=".94"/><ellipse cx="256" cy="256" rx="154" ry="61" stroke-width="8" opacity=".66" transform="rotate(55 256 256)"/><ellipse cx="256" cy="256" rx="154" ry="61" stroke-width="8" opacity=".66" transform="rotate(-55 256 256)"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">OBJETIVOS Spatial OS</title>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#080706"/>
+      <stop offset=".48" stop-color="#17100c"/>
+      <stop offset=".8" stop-color="#7f351c"/>
+      <stop offset="1" stop-color="#ff9b5d"/>
+    </linearGradient>
+    <linearGradient id="letters" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7e3018"/>
+      <stop offset="1" stop-color="#3a180d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy="1" r=".58">
+      <stop offset="0" stop-color="#ffd0a2" stop-opacity=".98"/>
+      <stop offset=".42" stop-color="#ff8b4b" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#d34e20" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="23"/></filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#120603" flood-opacity=".9"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#ff8c4d" flood-opacity=".28"/>
+    </filter>
+  </defs>
+  <rect x="51" y="44" width="410" height="410" rx="132" fill="#050403" opacity=".7" filter="url(#shadow)"/>
+  <rect x="61" y="54" width="390" height="390" rx="122" fill="url(#background)"/>
+  <ellipse cx="256" cy="415" rx="156" ry="83" fill="url(#glow)" filter="url(#blur)"/>
+  <rect x="69" y="62" width="374" height="374" rx="114" fill="none" stroke="#ffe1c5" stroke-opacity=".08" stroke-width="5"/>
+  <rect x="78" y="71" width="356" height="356" rx="106" fill="none" stroke="#ff9b60" stroke-opacity=".08" stroke-width="2"/>
+  <text x="248" y="294" text-anchor="middle" fill="url(#letters)" font-family="Inter,Arial,sans-serif" font-size="174" font-weight="760" letter-spacing="-17" style="paint-order:stroke;stroke:#150a06;stroke-width:2">OS</text>
+  <path d="M139 409c50 26 184 26 234 0" fill="none" stroke="#ffd1a7" stroke-opacity=".26" stroke-width="5" stroke-linecap="round"/>
+</svg>

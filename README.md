@@ -1,51 +1,28 @@
 # OBJETIVOS — Spatial OS
 
-Aplicativo web local, sem build e sem dependências externas obrigatórias. O estado é persistido no `localStorage` do navegador e pode ser exportado/importado em JSON.
+Aplicativo pessoal focado em duas coisas: tarefas e metas com prazo. Não há dados financeiros demonstrativos, Spotify, áreas paralelas ou dependências de build.
 
-## Abrir
+## Recursos
 
-### Mais simples
-Abra `index.html` no navegador.
+- Agenda compacta com navegação por dia.
+- Visão dos próximos 14 dias.
+- Tarefas únicas ou recorrentes.
+- Tarefas concluídas saem da lista principal e permanecem em um histórico recolhido.
+- Metas com alvo, realizado, unidade e prazo.
+- Valores realizados começam em zero; alvos e prazos pessoais são preservados.
+- Assistente local para criar, concluir e reagendar tarefas, além de criar, atualizar e zerar metas.
+- Salvamento automático no localStorage.
+- Atualização entre abas do mesmo navegador.
+- Backup e restauração em JSON.
+- Layout responsivo com área segura para iPhone.
+- PWA com cache offline.
 
-### Como PWA / com cache offline
-Execute um servidor local nesta pasta:
+## Executar localmente
 
-```bash
-python -m http.server 8080
-```
+    python -m http.server 8080
 
-Depois abra `http://localhost:8080`.
+Abra http://localhost:8080.
 
-No Windows, também é possível usar `start.bat` se Python/py estiver instalado.
+## Persistência
 
-## O que está funcional
-
-- Hoje: timeline unificada de tarefas, rotinas, reuniões e compromissos.
-- Tarefas fixas e flexíveis.
-- Reorganização automática de tarefas flexíveis quando o calendário muda.
-- Detecção de conflito entre compromissos fixos.
-- Recorrências com conclusão independente por ocorrência.
-- Histórico de conclusões persistente.
-- XP e nível.
-- Streak/consistência visual.
-- Semana com visão de carga e eventos.
-- Metas conectadas a tarefas, finanças e peso.
-- Ciclo de 12 semanas.
-- Financeiro com receitas, despesas, lucro, meta e histórico.
-- TikTok, Russo, Dieta, Academia e Marketing.
-- Controle executivo.
-- Conquistas.
-- Registro de peso.
-- Comandos naturais locais para criar reunião/tarefa, otimizar agenda e consultar meta financeira.
-- Spotify por URL de embed configurável.
-- Backup e restauração dos dados em JSON.
-- Layout responsivo desktop/mobile.
-- PWA básica e cache offline quando servido por HTTP/HTTPS.
-
-## Observação sobre IA
-
-O planejamento automático incluído funciona localmente com um motor determinístico de agenda: ele respeita compromissos fixos, prioridade, duração, prazos e janelas livres. O campo “Comando IA” possui interpretação local dos comandos principais. Uma IA generativa em nuvem (OpenAI/Gemini/etc.) exigiria credenciais/API e um backend próprio; nenhuma chave é embutida no pacote.
-
-## Dados
-
-O app inicia com dados demonstrativos para deixar os dashboards preenchidos. Use Configurações → Restaurar demo para voltar ao estado inicial ou Backup → Exportar antes de fazer mudanças importantes.
+Todas as alterações são salvas automaticamente no navegador. O armazenamento local não atravessa aparelhos: sincronização automática entre celular e computador requer um banco online com autenticação. Nenhuma senha ou chave privada deve ser embutida no repositório público.
