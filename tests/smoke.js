@@ -48,6 +48,7 @@ class Element {
 
 const elements = {
   root: new Element('html'),
+  body: new Element('body'),
   themeMeta: new Element('themeMeta'),
   syncStatus: new Element('syncStatus'),
   statusCopy: new Element('statusCopy'),
@@ -104,6 +105,7 @@ store.set('objetivos-spatial-os-v2', JSON.stringify({
 
 const document = {
   documentElement: elements.root,
+  body: elements.body,
   querySelector: (selector) => selectors[selector] || null,
   querySelectorAll: () => [],
   createElement: () => new Element(),
@@ -111,7 +113,7 @@ const document = {
   visibilityState: 'visible'
 };
 
-const window = { addEventListener() {}, removeEventListener() {} };
+const window = { scrollY: 240, addEventListener() {}, removeEventListener() {}, scrollTo() {} };
 const context = {
   console,
   document,
@@ -212,6 +214,8 @@ assert(store.has('objetivos-spatial-os-v2'));
 
 elements.quickAdd.onclick();
 assert(elements.modalLayer.innerHTML.includes('modal glass task-modal'), 'compact task modal class missing');
+assert(elements.root.classList.contains('modal-open'), 'modal must lock the app viewport');
+assert(elements.body.classList.contains('modal-open'), 'modal must lock background scrolling');
 assert(elements.modalLayer.innerHTML.includes('class="task-core-grid"'), 'compact task core grid missing');
 assert(elements.modalLayer.innerHTML.includes('class="task-options-grid"'), 'compact task options grid missing');
 assert(elements.modalLayer.innerHTML.includes('<details class="task-advanced"'), 'advanced task fields are not collapsible');

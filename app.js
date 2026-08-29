@@ -358,6 +358,7 @@
   let taskDrag = null;
   let suppressDayClick = false;
   let suppressTaskClick = false;
+  let modalScrollY = 0;
 
   function hexToRgb(value, fallback = '127 169 230') {
     const match = String(value || '').trim().match(/^#([\da-f]{6})$/i);
@@ -949,6 +950,12 @@
 
   function openModal(content, className = '') {
     const layer = $('#modalLayer');
+    if (!document.body?.classList.contains('modal-open')) {
+      modalScrollY = window.scrollY || window.pageYOffset || 0;
+      document.documentElement?.classList.add('modal-open');
+      document.body?.classList.add('modal-open');
+      document.body?.style.setProperty('top', `-${modalScrollY}px`);
+    }
     layer.classList.add('open');
     layer.innerHTML = `<section class="modal glass ${className}" role="dialog" aria-modal="true">${content}</section>`;
     requestAnimationFrame(() => {
@@ -961,6 +968,11 @@
     const layer = $('#modalLayer');
     layer.classList.remove('open');
     layer.innerHTML = '';
+    const wasLocked = document.body?.classList.contains('modal-open');
+    document.documentElement?.classList.remove('modal-open');
+    document.body?.classList.remove('modal-open');
+    document.body?.style.removeProperty('top');
+    if (wasLocked) window.scrollTo?.(0, modalScrollY);
   }
 
   function repeatPresetFor(task) {
