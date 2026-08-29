@@ -1,5 +1,5 @@
-const CACHE = 'objetivos-spatial-v8';
-const ASSETS = ['./', './index.html', './styles.css?v=8', './app.js?v=8', './cloud-config.js?v=8', './cloud-sync.js?v=8', './manifest.webmanifest?v=8', './assets/icon.svg?v=8', './assets/apple-touch-icon.png?v=8', './assets/icon-192.png', './assets/icon-512.png'];
+const CACHE = 'objetivos-spatial-v9';
+const ASSETS = ['./', './index.html', './styles.css?v=9', './app.js?v=9', './cloud-config.js?v=9', './cloud-sync.js?v=9', './manifest.webmanifest?v=9', './assets/icon.svg?v=9', './assets/apple-touch-icon.png?v=9', './assets/icon-192.png', './assets/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
