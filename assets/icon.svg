@@ -22,6 +22,9 @@
       <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#ff8c4d" flood-opacity=".28"/>
     </filter>
   </defs>
+  <rect width="512" height="512" fill="#050403"/>
+  <rect width="512" height="512" fill="url(#background)" opacity=".34"/>
+  <ellipse cx="256" cy="498" rx="238" ry="126" fill="url(#glow)" filter="url(#blur)" opacity=".48"/>
   <rect x="51" y="44" width="410" height="410" rx="132" fill="#050403" opacity=".7" filter="url(#shadow)"/>
   <rect x="61" y="54" width="390" height="390" rx="122" fill="url(#background)"/>
   <ellipse cx="256" cy="415" rx="156" ry="83" fill="url(#glow)" filter="url(#blur)"/>

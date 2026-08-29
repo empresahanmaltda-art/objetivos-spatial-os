@@ -1,7 +1,6 @@
 (() => {
   'use strict';
 
-  const EMAIL_KEY = 'objetivos-cloud-email-v1';
   const DIRTY_KEY = 'objetivos-cloud-dirty-v1';
   const CONFIG = window.OBJETIVOS_CLOUD_CONFIG || {};
   const runtime = {
@@ -43,6 +42,29 @@
     runtime.syncing = syncing;
     runtime.error = error;
     refreshSettings();
+  }
+
+  function setAuthGate({ unlocked = false, busy = false, message = '' } = {}) {
+    const body = document.body;
+    const gate = document.querySelector('#authGate');
+    const shell = document.querySelector('#appShell');
+    const button = document.querySelector('#authGoogleBtn');
+    const label = button?.querySelector?.('.google-button-label');
+    const status = document.querySelector('#authGateStatus');
+    body?.classList?.toggle('auth-locked', !unlocked);
+    body?.classList?.toggle('auth-ready', unlocked);
+    gate?.setAttribute?.('aria-hidden', unlocked ? 'true' : 'false');
+    if (shell) {
+      shell.setAttribute('aria-hidden', unlocked ? 'false' : 'true');
+      if (unlocked) shell.removeAttribute('inert');
+      else shell.setAttribute('inert', '');
+    }
+    if (button) {
+      button.disabled = busy || !configured();
+      button.classList.toggle('is-loading', busy);
+    }
+    if (label) label.textContent = busy ? 'Conectando…' : 'Continuar com Google';
+    if (status) status.textContent = message || (unlocked ? 'Tudo sincronizado.' : 'Entre para abrir seu espaço.');
   }
 
   async function uploadState(input, { force = false } = {}) {
@@ -140,47 +162,37 @@
       .subscribe();
   }
 
-  async function sendLink(email) {
+  async function signInWithGoogle() {
     if (!runtime.client) throw new Error('Servidor ainda não configurado.');
-    const cleanEmail = String(email || '').trim().toLowerCase();
-    if (!cleanEmail.includes('@')) throw new Error('Digite um email válido.');
-    localStorage.setItem(EMAIL_KEY, cleanEmail);
-    const emailRedirectTo = `${window.location.origin}${window.location.pathname}`;
-    const { error } = await runtime.client.auth.signInWithOtp({
-      email: cleanEmail,
-      options: { shouldCreateUser: true, emailRedirectTo }
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { data, error } = await runtime.client.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo, queryParams: { prompt: 'select_account' } }
     });
     if (error) throw error;
-    return cleanEmail;
+    return data;
   }
 
-  function trustedMagicLink(value) {
-    let candidate;
-    try { candidate = new URL(String(value || '').trim()); }
-    catch { throw new Error('Cole o link completo recebido no email.'); }
-    const projectOrigin = new URL(CONFIG.supabaseUrl).origin;
-    const isVerifyLink = candidate.origin === projectOrigin && candidate.pathname === '/auth/v1/verify';
-    const isAppCallback = candidate.origin === window.location.origin
-      && candidate.pathname === window.location.pathname
-      && (candidate.searchParams.has('code') || /(?:^|[&#])access_token=/.test(candidate.hash));
-    if (!isVerifyLink && !isAppCallback) throw new Error('Esse não é o link de acesso do OBJETIVOS.');
-    return candidate;
-  }
-
-  async function openMagicLink(value) {
-    const candidate = trustedMagicLink(value);
-    if (candidate.origin !== window.location.origin) {
-      const tokenHash = candidate.searchParams.get('token_hash') || candidate.searchParams.get('token');
-      const requestedType = candidate.searchParams.get('type') || 'email';
-      const allowedTypes = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email'];
-      if (!tokenHash || !allowedTypes.includes(requestedType)) throw new Error('Esse link de acesso está incompleto. Envie um novo.');
-      if (!runtime.client?.auth?.verifyOtp) throw new Error('O servidor ainda está iniciando. Tente novamente.');
-      const { error } = await runtime.client.auth.verifyOtp({ token_hash: tokenHash, type: requestedType });
-      if (error) throw error;
-      return true;
+  async function beginGoogleLogin(sourceButton) {
+    setAuthGate({ busy: true, message: 'Abrindo o acesso seguro do Google…' });
+    if (sourceButton) sourceButton.disabled = true;
+    try {
+      const data = await signInWithGoogle();
+      setAuthGate({ message: 'Conclua o acesso na tela do Google.' });
+      return data;
+    } catch (error) {
+      const message = error.message || 'Não foi possível entrar com o Google.';
+      setRuntimeStatus({ error: message });
+      setAuthGate({ message });
+      if (sourceButton) sourceButton.disabled = false;
+      throw error;
     }
-    window.location.assign(candidate.href);
-    return true;
+  }
+
+  function bindAuthGate() {
+    const button = document.querySelector('#authGoogleBtn');
+    if (!button) return;
+    button.onclick = () => beginGoogleLogin(button).catch(() => {});
   }
 
   function urlBase64ToBytes(value) {
@@ -229,10 +241,9 @@
   async function refreshSettings() {
     const copy = document.querySelector('#cloudStatusCopy');
     const button = document.querySelector('#cloudAccountBtn');
-    const panel = document.querySelector('#cloudAuthPanel');
     const pushCopy = document.querySelector('#pushStatusCopy');
     const pushButton = document.querySelector('#pushServerBtn');
-    if (!copy || !button || !panel) return;
+    if (!copy || !button) return;
     if (!configured()) {
       copy.textContent = 'A estrutura segura está pronta; falta finalizar o projeto do servidor.';
       button.textContent = 'Pendente';
@@ -243,10 +254,17 @@
     }
     button.disabled = false;
     if (runtime.error) copy.textContent = runtime.error;
-    else if (runtime.session) copy.textContent = `Sincronizado como ${runtime.session.user.email || 'conta conectada'}.`;
-    else copy.textContent = 'Entre por email para usar os mesmos dados em todos os aparelhos.';
-    button.textContent = runtime.session ? (runtime.syncing ? 'Sincronizando…' : 'Sincronizar') : 'Conectar';
-    if (runtime.session) panel.hidden = true;
+    else if (runtime.session) copy.textContent = `Sincronizado como ${runtime.session.user.email || 'conta Google conectada'}.`;
+    else copy.textContent = 'Entre com a mesma conta Google no celular e no computador.';
+    if (runtime.session) {
+      button.className = 'soft-button';
+      button.textContent = runtime.syncing ? 'Sincronizando…' : 'Sincronizar';
+      button.setAttribute('aria-label', button.textContent);
+    } else {
+      button.className = 'google-signin-button';
+      button.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4L15.4 17c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-4V7.4H3.2a10 10 0 0 0 0 9.2L6.5 14Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.2 7.4L6.5 10A5.8 5.8 0 0 1 12 6Z"/></svg><span>Continuar com Google</span>';
+      button.setAttribute('aria-label', 'Continuar com Google');
+    }
     if (pushCopy && pushButton) {
       const active = await pushIsActive();
       pushCopy.textContent = active ? 'Alertas do servidor ativos neste aparelho.' : 'Ative para receber alertas mesmo com o PWA fechado.';
@@ -257,46 +275,19 @@
 
   function bindSettings() {
     const accountButton = document.querySelector('#cloudAccountBtn');
-    const panel = document.querySelector('#cloudAuthPanel');
-    const email = document.querySelector('#cloudEmail');
-    const send = document.querySelector('#cloudSendLinkBtn');
-    const linkField = document.querySelector('#cloudLinkField');
-    const magicLink = document.querySelector('#cloudMagicLink');
-    const openLink = document.querySelector('#cloudOpenLinkBtn');
-    const note = document.querySelector('#cloudAuthNote');
     const pushButton = document.querySelector('#pushServerBtn');
-    if (!accountButton || !panel || !email || !send || !linkField || !magicLink || !openLink || !note || !pushButton) return;
-    email.value = localStorage.getItem(EMAIL_KEY) || '';
+    if (!accountButton || !pushButton) return;
     accountButton.onclick = async () => {
       if (runtime.session) {
         await uploadState(api()?.getState?.(), { force: true });
-        note.textContent = 'Tudo sincronizado agora.';
       } else {
-        panel.hidden = !panel.hidden;
-        if (!panel.hidden) email.focus();
-      }
-    };
-    send.onclick = async () => {
-      send.disabled = true;
-      note.textContent = 'Enviando…';
-      try {
-        await sendLink(email.value);
-        linkField.hidden = false;
-        openLink.hidden = false;
-        note.textContent = 'No iPhone instalado: segure “Sign in” no email, copie o link, cole acima e toque em “Entrar neste app”.';
-      } catch (error) {
-        note.textContent = error.message || 'Não foi possível enviar o link.';
-      } finally { send.disabled = false; }
-    };
-    openLink.onclick = async () => {
-      openLink.disabled = true;
-      note.textContent = 'Confirmando o acesso dentro deste app…';
-      try {
-        await openMagicLink(magicLink.value);
-        note.textContent = 'Acesso confirmado. Seus dados já estão sincronizando.';
-      } catch (error) {
-        openLink.disabled = false;
-        note.textContent = error.message || 'Não foi possível abrir o link.';
+        accountButton.disabled = true;
+        try {
+          await beginGoogleLogin(accountButton);
+        } catch (error) {
+          accountButton.disabled = false;
+          setRuntimeStatus({ error: error.message || 'Não foi possível entrar com o Google.' });
+        }
       }
     };
     pushButton.onclick = async () => {
@@ -314,6 +305,8 @@
   }
 
   async function boot() {
+    bindAuthGate();
+    setAuthGate({ busy: true, message: 'Verificando sua sessão segura…' });
     runtime.lastHash = hashState(api()?.getState?.());
     window.addEventListener('objetivos:state-saved', (event) => scheduleUpload(event.detail?.state));
     window.addEventListener('online', () => runtime.session && uploadState(api()?.getState?.()));
@@ -322,30 +315,49 @@
     });
     if (!configured()) {
       setRuntimeStatus({ error: '' });
+      setAuthGate({ message: 'Servidor de acesso indisponível. Tente novamente em instantes.' });
       return;
     }
     runtime.client = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.publishableKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
     runtime.client.auth.onAuthStateChange((_event, session) => {
+      const wasSignedIn = Boolean(runtime.session);
       runtime.session = session;
-      if (session) setTimeout(initialSync, 0);
+      if (session) {
+        if (!wasSignedIn) setAuthGate({ busy: true, message: 'Preparando seu espaço…' });
+        setTimeout(async () => {
+          await initialSync();
+          setAuthGate({ unlocked: true, message: 'Tudo sincronizado.' });
+        }, 0);
+      }
       else {
         runtime.channel = null;
         setTopStatus('salvo neste aparelho');
         refreshSettings();
+        setAuthGate({ message: 'Entre com sua conta Google para continuar.' });
       }
     });
     const { data } = await runtime.client.auth.getSession();
     runtime.session = data.session;
-    if (runtime.session) await initialSync();
-    else refreshSettings();
+    if (runtime.session) {
+      setAuthGate({ busy: true, message: 'Sincronizando suas tarefas e metas…' });
+      await initialSync();
+      setAuthGate({ unlocked: true, message: 'Tudo sincronizado.' });
+    } else {
+      refreshSettings();
+      setAuthGate({ message: 'Entre com sua conta Google para continuar.' });
+    }
   }
 
   window.OBJETIVOS_CLOUD = {
     bindSettings,
-    openLoginLink: openMagicLink,
+    signInWithGoogle,
     uploadNow: () => uploadState(api()?.getState?.(), { force: true })
   };
-  boot().catch((error) => setRuntimeStatus({ error: error.message || 'Falha ao iniciar sincronização.' }));
+  boot().catch((error) => {
+    const message = error.message || 'Falha ao iniciar sincronização.';
+    setRuntimeStatus({ error: message });
+    setAuthGate({ message });
+  });
 })();

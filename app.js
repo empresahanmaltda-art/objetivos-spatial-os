@@ -67,7 +67,7 @@
   }
 
   const themePresets = {
-    spatial: { label: 'Spatial', accent: '#7fa9e6', ambient: '#85878b', themeColor: '#202225' },
+    spatial: { label: 'Spatial', accent: '#79aef0', ambient: '#958b7f', themeColor: '#302c28' },
     warm: { label: 'Quente', accent: '#ff9b61', ambient: '#9b7259', themeColor: '#29231f' },
     cold: { label: 'Frio', accent: '#72d7f2', ambient: '#456a86', themeColor: '#151d24' },
     sexy: { label: 'Sexy', accent: '#ff5d91', ambient: '#6d294f', themeColor: '#21151d' }
@@ -1489,14 +1489,10 @@
         </div>
         <div class="setting-row" id="cloudSettingRow">
           <div class="setting-copy"><strong>Celular ↔ computador</strong><span id="cloudStatusCopy">Verificando o servidor seguro…</span></div>
-          <button class="soft-button" id="cloudAccountBtn" type="button">Conectar</button>
-        </div>
-        <div class="cloud-auth-panel" id="cloudAuthPanel" hidden>
-          <div class="field"><label>Email</label><input id="cloudEmail" type="email" autocomplete="email" placeholder="seu@email.com" /></div>
-          <button class="soft-button" id="cloudSendLinkBtn" type="button">Enviar link</button>
-          <div class="field cloud-link-field" id="cloudLinkField" hidden><label>Link recebido</label><input id="cloudMagicLink" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Cole aqui o link “Sign in”" /></div>
-          <button class="primary-button cloud-link-action" id="cloudOpenLinkBtn" type="button" hidden>Entrar neste app</button>
-          <span class="cloud-auth-note" id="cloudAuthNote">Use o mesmo email no celular e no computador. Você entra por um link seguro.</span>
+          <button class="google-signin-button" id="cloudAccountBtn" type="button" aria-label="Continuar com Google">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4L15.4 17c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-4V7.4H3.2a10 10 0 0 0 0 9.2L6.5 14Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.2 7.4L6.5 10A5.8 5.8 0 0 1 12 6Z"/></svg>
+            <span>Continuar com Google</span>
+          </button>
         </div>
         <div class="setting-row">
           <div class="setting-copy"><strong>Backup</strong><span>Leve todas as tarefas e metas em um arquivo JSON.</span></div>
@@ -1870,7 +1866,7 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=5').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=8').catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
