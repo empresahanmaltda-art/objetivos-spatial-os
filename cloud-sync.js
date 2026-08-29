@@ -154,6 +154,35 @@
     return cleanEmail;
   }
 
+  function trustedMagicLink(value) {
+    let candidate;
+    try { candidate = new URL(String(value || '').trim()); }
+    catch { throw new Error('Cole o link completo recebido no email.'); }
+    const projectOrigin = new URL(CONFIG.supabaseUrl).origin;
+    const isVerifyLink = candidate.origin === projectOrigin && candidate.pathname === '/auth/v1/verify';
+    const isAppCallback = candidate.origin === window.location.origin
+      && candidate.pathname === window.location.pathname
+      && (candidate.searchParams.has('code') || /(?:^|[&#])access_token=/.test(candidate.hash));
+    if (!isVerifyLink && !isAppCallback) throw new Error('Esse não é o link de acesso do OBJETIVOS.');
+    return candidate;
+  }
+
+  async function openMagicLink(value) {
+    const candidate = trustedMagicLink(value);
+    if (candidate.origin !== window.location.origin) {
+      const tokenHash = candidate.searchParams.get('token_hash') || candidate.searchParams.get('token');
+      const requestedType = candidate.searchParams.get('type') || 'email';
+      const allowedTypes = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email'];
+      if (!tokenHash || !allowedTypes.includes(requestedType)) throw new Error('Esse link de acesso está incompleto. Envie um novo.');
+      if (!runtime.client?.auth?.verifyOtp) throw new Error('O servidor ainda está iniciando. Tente novamente.');
+      const { error } = await runtime.client.auth.verifyOtp({ token_hash: tokenHash, type: requestedType });
+      if (error) throw error;
+      return true;
+    }
+    window.location.assign(candidate.href);
+    return true;
+  }
+
   function urlBase64ToBytes(value) {
     const padding = '='.repeat((4 - value.length % 4) % 4);
     const raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'));
@@ -231,9 +260,12 @@
     const panel = document.querySelector('#cloudAuthPanel');
     const email = document.querySelector('#cloudEmail');
     const send = document.querySelector('#cloudSendLinkBtn');
+    const linkField = document.querySelector('#cloudLinkField');
+    const magicLink = document.querySelector('#cloudMagicLink');
+    const openLink = document.querySelector('#cloudOpenLinkBtn');
     const note = document.querySelector('#cloudAuthNote');
     const pushButton = document.querySelector('#pushServerBtn');
-    if (!accountButton || !panel || !email || !send || !note || !pushButton) return;
+    if (!accountButton || !panel || !email || !send || !linkField || !magicLink || !openLink || !note || !pushButton) return;
     email.value = localStorage.getItem(EMAIL_KEY) || '';
     accountButton.onclick = async () => {
       if (runtime.session) {
@@ -249,10 +281,23 @@
       note.textContent = 'Enviando…';
       try {
         await sendLink(email.value);
-        note.textContent = 'Link enviado. Abra o email neste aparelho e toque em “Sign in”.';
+        linkField.hidden = false;
+        openLink.hidden = false;
+        note.textContent = 'No iPhone instalado: segure “Sign in” no email, copie o link, cole acima e toque em “Entrar neste app”.';
       } catch (error) {
         note.textContent = error.message || 'Não foi possível enviar o link.';
       } finally { send.disabled = false; }
+    };
+    openLink.onclick = async () => {
+      openLink.disabled = true;
+      note.textContent = 'Confirmando o acesso dentro deste app…';
+      try {
+        await openMagicLink(magicLink.value);
+        note.textContent = 'Acesso confirmado. Seus dados já estão sincronizando.';
+      } catch (error) {
+        openLink.disabled = false;
+        note.textContent = error.message || 'Não foi possível abrir o link.';
+      }
     };
     pushButton.onclick = async () => {
       pushButton.disabled = true;
@@ -299,6 +344,7 @@
 
   window.OBJETIVOS_CLOUD = {
     bindSettings,
+    openLoginLink: openMagicLink,
     uploadNow: () => uploadState(api()?.getState?.(), { force: true })
   };
   boot().catch((error) => setRuntimeStatus({ error: error.message || 'Falha ao iniciar sincronização.' }));
