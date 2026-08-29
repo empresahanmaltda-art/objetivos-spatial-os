@@ -9,8 +9,7 @@ async function main() {
   let realtimeHandler = null;
   let remoteApplied = null;
   let status = '';
-  let assignedUrl = '';
-  let verifiedOtp = null;
+  let oauthRequest = null;
   const session = { user: { id: 'user-1', email: 'owner@example.com' } };
   const localState = {
     version: 3,
@@ -33,7 +32,7 @@ async function main() {
     auth: {
       onAuthStateChange() {},
       async getSession() { return { data: { session } }; },
-      async verifyOtp(params) { verifiedOtp = params; return { data: { session }, error: null }; }
+      async signInWithOAuth(params) { oauthRequest = params; return { data: { url: 'https://accounts.google.com/' }, error: null }; }
     },
     from(table) {
       assert.strictEqual(table, 'user_state');
@@ -53,9 +52,41 @@ async function main() {
     applyCloudState(payload) { remoteApplied = payload; },
     setSyncLabel(label) { status = label; }
   };
+  class FakeClassList {
+    constructor() { this.values = new Set(); }
+    toggle(name, force) {
+      if (force) this.values.add(name);
+      else this.values.delete(name);
+    }
+    contains(name) { return this.values.has(name); }
+  }
+  const makeElement = () => ({
+    attrs: new Map(),
+    classList: new FakeClassList(),
+    disabled: false,
+    setAttribute(name, value) { this.attrs.set(name, String(value)); },
+    removeAttribute(name) { this.attrs.delete(name); },
+    querySelector() { return null; }
+  });
+  const body = makeElement();
+  body.classList.values.add('auth-locked');
+  const authGate = makeElement();
+  const appShell = makeElement();
+  appShell.attrs.set('inert', '');
+  const authButton = makeElement();
+  const authLabel = { textContent: '' };
+  authButton.querySelector = (selector) => selector === '.google-button-label' ? authLabel : null;
+  const authStatus = { textContent: '' };
+  const dom = new Map([
+    ['#authGate', authGate],
+    ['#appShell', appShell],
+    ['#authGoogleBtn', authButton],
+    ['#authGateStatus', authStatus]
+  ]);
   const document = {
+    body,
     visibilityState: 'visible',
-    querySelector() { return null; },
+    querySelector(selector) { return dom.get(selector) || null; },
     addEventListener() {}
   };
   const window = {
@@ -65,7 +96,7 @@ async function main() {
     location: {
       origin: 'https://empresahanmaltda-art.github.io',
       pathname: '/objetivos-spatial-os/',
-      assign(url) { assignedUrl = url; }
+      assign() {}
     },
     addEventListener(type, handler) { savedListeners.set(type, handler); }
   };
@@ -103,6 +134,10 @@ async function main() {
   assert.strictEqual(upserts[0].payload.settings.notificationsEnabled, undefined, 'notification permission must stay device-local');
   assert.strictEqual(status, 'sincronizado');
   assert(realtimeHandler, 'realtime subscription missing');
+  assert(body.classList.contains('auth-ready'), 'authenticated app was not revealed');
+  assert(!body.classList.contains('auth-locked'), 'login gate stayed locked after session confirmation');
+  assert.strictEqual(appShell.attrs.get('aria-hidden'), 'false');
+  assert(!appShell.attrs.has('inert'), 'authenticated app remained inert');
 
   const changed = JSON.parse(JSON.stringify(localState));
   changed.tasks.push({ id: 'task-2', title: 'Treino', date: '2026-08-28', time: '19:30' });
@@ -113,19 +148,12 @@ async function main() {
   realtimeHandler({ new: { payload: { version: 3, tasks: [{ id: 'remote', title: 'Remoto' }], goals: [], settings: {} } } });
   assert(remoteApplied?.tasks?.some((task) => task.id === 'remote'), 'remote state was not applied');
 
-  await window.OBJETIVOS_CLOUD.openLoginLink('https://project.supabase.co/auth/v1/verify?token=abc&type=magiclink');
-  assert.strictEqual(verifiedOtp.token_hash, 'abc');
-  assert.strictEqual(verifiedOtp.type, 'magiclink');
+  await window.OBJETIVOS_CLOUD.signInWithGoogle();
+  assert.strictEqual(oauthRequest.provider, 'google');
+  assert.strictEqual(oauthRequest.options.redirectTo, 'https://empresahanmaltda-art.github.io/objetivos-spatial-os/');
+  assert.strictEqual(oauthRequest.options.queryParams.prompt, 'select_account');
 
-  await window.OBJETIVOS_CLOUD.openLoginLink('https://empresahanmaltda-art.github.io/objetivos-spatial-os/#access_token=test');
-  assert.strictEqual(assignedUrl, 'https://empresahanmaltda-art.github.io/objetivos-spatial-os/#access_token=test');
-
-  let rejectedUntrustedLink = false;
-  try { await window.OBJETIVOS_CLOUD.openLoginLink('https://evil.example/auth/v1/verify?token=stolen'); }
-  catch { rejectedUntrustedLink = true; }
-  assert(rejectedUntrustedLink, 'untrusted login link was accepted');
-
-  console.log(JSON.stringify({ ok: true, initialUpload: true, autosaveUpload: true, realtimeApply: true, safePwaLogin: true }));
+  console.log(JSON.stringify({ ok: true, initialUpload: true, autosaveUpload: true, realtimeApply: true, googleOAuth: true }));
 }
 
 main().catch((error) => {

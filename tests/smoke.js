@@ -152,6 +152,18 @@ context.globalThis = context;
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('app.js', 'utf8'), context);
 
+const appSource = fs.readFileSync('app.js', 'utf8');
+const indexSource = fs.readFileSync('index.html', 'utf8');
+const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
+assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
+assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
+assert(indexSource.includes('apple-touch-icon.png?v=8'), 'iOS home-screen icon missing');
+assert(indexSource.includes('id="authGate"'), 'login gate missing');
+assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing');
+assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
+assert(manifest.icons.some((icon) => icon.src === 'assets/icon-192.png' && icon.type === 'image/png'));
+assert(manifest.icons.some((icon) => icon.src === 'assets/icon-512.png' && icon.purpose.includes('maskable')));
+
 const api = window.__OBJETIVOS__;
 assert(api, 'public test API missing');
 let state = api.getState();

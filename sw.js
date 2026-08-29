@@ -1,5 +1,5 @@
-const CACHE = 'objetivos-spatial-v7';
-const ASSETS = ['./', './index.html', './styles.css?v=7', './app.js?v=7', './cloud-config.js?v=7', './cloud-sync.js?v=7', './manifest.webmanifest?v=7', './assets/icon.svg'];
+const CACHE = 'objetivos-spatial-v8';
+const ASSETS = ['./', './index.html', './styles.css?v=8', './app.js?v=8', './cloud-config.js?v=8', './cloud-sync.js?v=8', './manifest.webmanifest?v=8', './assets/icon.svg?v=8', './assets/apple-touch-icon.png?v=8', './assets/icon-192.png', './assets/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -39,8 +39,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'OBJETIVOS';
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || 'Uma tarefa da sua rotina está começando.',
-    icon: './assets/icon.svg',
-    badge: './assets/icon.svg',
+    icon: './assets/icon-192.png',
+    badge: './assets/icon-192.png',
     tag: data.tag || `objetivos-${Date.now()}`,
     data: { url: data.url || './', ...(data.data || {}) }
   }));
