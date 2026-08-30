@@ -67,10 +67,10 @@
   }
 
   const themePresets = {
-    spatial: { label: 'Spatial', accent: '#79aef0', background: '#302c28', glass: '#48423b', module: '#1e1c19', glow: '#958b7f', intensity: 62, glassOpacity: 82, moduleOpacity: 84, glassBlur: 28, themeColor: '#554e46' },
-    warm: { label: 'Quente', accent: '#ff9b61', background: '#27231f', glass: '#413a34', module: '#1f1c1a', glow: '#9b7259', intensity: 68, glassOpacity: 80, moduleOpacity: 86, glassBlur: 27, themeColor: '#4a4138' },
-    cold: { label: 'Frio', accent: '#72d7f2', background: '#17232c', glass: '#212f39', module: '#0f171d', glow: '#456a86', intensity: 65, glassOpacity: 80, moduleOpacity: 86, glassBlur: 30, themeColor: '#243846' },
-    sexy: { label: 'Sexy', accent: '#ff5d91', background: '#23151e', glass: '#351f2d', module: '#181015', glow: '#6d294f', intensity: 72, glassOpacity: 82, moduleOpacity: 88, glassBlur: 30, themeColor: '#3b2433' }
+    spatial: { label: 'Spatial', accent: '#79aef0', background: '#302c28', glass: '#48423b', module: '#1e1c19', glow: '#958b7f', intensity: 62, glassOpacity: 82, moduleOpacity: 84, glassBlur: 28, themeColor: '#171614' },
+    warm: { label: 'Quente', accent: '#ff9b61', background: '#27231f', glass: '#413a34', module: '#1f1c1a', glow: '#9b7259', intensity: 68, glassOpacity: 80, moduleOpacity: 86, glassBlur: 27, themeColor: '#191715' },
+    cold: { label: 'Frio', accent: '#72d7f2', background: '#17232c', glass: '#212f39', module: '#0f171d', glow: '#456a86', intensity: 65, glassOpacity: 80, moduleOpacity: 86, glassBlur: 30, themeColor: '#0c1217' },
+    sexy: { label: 'Sexy', accent: '#ff5d91', background: '#23151e', glass: '#351f2d', module: '#181015', glow: '#6d294f', intensity: 72, glassOpacity: 82, moduleOpacity: 88, glassBlur: 30, themeColor: '#100b0f' }
   };
 
   const weekdayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
@@ -418,7 +418,8 @@
     root.style.setProperty('--glass-blur', `${glassBlur}px`);
     root.style.setProperty('--shadow', `0 30px 80px rgba(4,6,8,.4),0 0 ${Math.round(12 + intensity * .34)}px rgb(${hexToRgb(glow, '149 139 127')} / ${(.025 + intensity * .0012).toFixed(3)}),inset 0 1px 0 rgba(255,255,255,.06)`);
     const themeMeta = $('meta[name="theme-color"]');
-    if (themeMeta) themeMeta.setAttribute('content', custom ? background : preset.themeColor);
+    const backgroundThemeColor = custom ? `rgb(${blendRgb(background, '#060708', .56)})` : preset.themeColor;
+    if (themeMeta) themeMeta.setAttribute('content', document.body?.classList.contains('modal-open') ? '#111315' : backgroundThemeColor);
   }
 
   function haptic(kind = 'tap') {
@@ -1001,6 +1002,7 @@
     }
     layer.classList.add('open');
     layer.innerHTML = `<section class="modal glass ${className}" role="dialog" aria-modal="true">${content}</section>`;
+    applyAppearance();
     requestAnimationFrame(() => {
       const firstField = $('input:not([type="hidden"]),textarea,select', layer);
       const mobileClose = window.matchMedia?.('(max-width:760px)')?.matches ? $('.modal-head .modal-close', layer) : null;
@@ -1015,6 +1017,7 @@
     const wasLocked = document.body?.classList.contains('modal-open');
     document.documentElement?.classList.remove('modal-open');
     document.body?.classList.remove('modal-open');
+    applyAppearance();
     const scroller = $('#appShell');
     if (wasLocked && scroller) scroller.scrollTop = modalScrollY;
   }
@@ -1997,7 +2000,7 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=14').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=15').catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
