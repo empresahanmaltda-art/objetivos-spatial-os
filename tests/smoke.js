@@ -167,7 +167,7 @@ const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
-assert(indexSource.includes('apple-touch-icon.png?v=10'), 'iOS home-screen icon missing');
+assert(indexSource.includes('apple-touch-icon.png?v=11'), 'iOS home-screen icon missing');
 assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black"'), 'iOS status bar must not overlap app content');
 assert(stylesSource.includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
 assert(stylesSource.includes('position:fixed;inset:0;'), 'document viewport must stay fixed on iOS');
@@ -264,6 +264,12 @@ assert(elements.modalLayer.innerHTML.includes('class="task-options-grid"'), 'com
 assert(elements.modalLayer.innerHTML.includes('<details class="task-advanced"'), 'advanced task fields are not collapsible');
 assert(elements.modalLayer.innerHTML.indexOf('<label>Duração</label>') > elements.modalLayer.innerHTML.indexOf('<details class="task-advanced"'), 'duration must stay inside compact advanced options');
 assert(!elements.modalLayer.innerHTML.includes('<div class="input-grid">'), 'legacy oversized task form leaked');
+
+assert(!stylesSource.includes('position:sticky'), 'top bar must scroll with the page');
+assert(stylesSource.includes('.workspace:focus{outline:none}'), 'workspace must not show a native focus ring');
+assert(stylesSource.includes('.task-core-grid,.task-options-grid{grid-template-columns:minmax(0,1fr)'), 'mobile task fields must stack without overlapping');
+assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
+assert(indexSource.includes('styles.css?v=11'), 'v11 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
