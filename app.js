@@ -359,6 +359,7 @@
   let suppressDayClick = false;
   let suppressTaskClick = false;
   let modalScrollY = 0;
+  let viewportTouch = null;
 
   function hexToRgb(value, fallback = '127 169 230') {
     const match = String(value || '').trim().match(/^#([\da-f]{6})$/i);
@@ -411,7 +412,7 @@
         applyAppearance();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         suppressBroadcast = false;
-        render();
+        render({ quiet: true });
         setSaveStatus('atualizado');
       };
     }
@@ -604,7 +605,7 @@
       task.date = nextDate;
       lastCompletionAction = { taskId, previousDate, nextDate };
       save();
-      render();
+      render({ quiet: true });
       haptic('success');
       toast(`Concluída. Próxima: ${formatShortDate(nextDate)}.`, {
         actionLabel: 'Desfazer',
@@ -614,7 +615,7 @@
           current.date = previousDate;
           delete current.completionHistory?.[previousDate];
           save();
-          render();
+          render({ quiet: true });
           haptic('select');
         },
         duration: 5000
@@ -629,7 +630,7 @@
       task.completedAt = done ? null : Date.now();
     }
     save();
-    render();
+    render({ quiet: true });
     haptic(done ? 'select' : 'success');
     toast(done ? 'Tarefa devolvida para a lista.' : 'Concluída e arquivada.');
   }
@@ -637,7 +638,7 @@
   function deleteTask(taskId) {
     state.tasks = state.tasks.filter((task) => task.id !== taskId);
     save();
-    render();
+    render({ quiet: true });
     toast('Tarefa removida.');
   }
 
@@ -712,13 +713,17 @@
     requestAnimationFrame(() => $('#viewRoot')?.focus());
   }
 
+  let renderedNavView = null;
+
   function renderNav() {
+    if (renderedNavView === state.view) return;
     $('#bottomDock').innerHTML = navItems.map((item) => `
       <button class="dock-button ${state.view === item.id ? 'active' : ''}" data-view="${item.id}" type="button">
         <span class="dock-icon">${item.icon}</span>
         <span>${item.label}</span>
       </button>
     `).join('');
+    renderedNavView = state.view;
   }
 
   function viewHead(eyebrow, title, subtitle, actions = '') {
@@ -938,23 +943,26 @@
     `;
   }
 
-  function render() {
+  function render({ quiet = false, preserveScroll = quiet } = {}) {
+    const scroller = $('#appShell');
+    const previousScroll = preserveScroll ? Number(scroller?.scrollTop || 0) : 0;
     applyAppearance();
     renderNav();
     const views = { today: renderToday, upcoming: renderUpcoming, goals: renderGoals };
     const root = $('#viewRoot');
     root.dataset.direction = motionDirection;
+    root.dataset.update = quiet ? 'quiet' : 'animated';
     root.innerHTML = (views[state.view] || renderToday)();
+    if (preserveScroll && scroller) scroller.scrollTop = previousScroll;
     updateAppBadge();
   }
 
   function openModal(content, className = '') {
     const layer = $('#modalLayer');
     if (!document.body?.classList.contains('modal-open')) {
-      modalScrollY = window.scrollY || window.pageYOffset || 0;
+      modalScrollY = Number($('#appShell')?.scrollTop || 0);
       document.documentElement?.classList.add('modal-open');
       document.body?.classList.add('modal-open');
-      document.body?.style.setProperty('top', `-${modalScrollY}px`);
     }
     layer.classList.add('open');
     layer.innerHTML = `<section class="modal glass ${className}" role="dialog" aria-modal="true">${content}</section>`;
@@ -971,8 +979,8 @@
     const wasLocked = document.body?.classList.contains('modal-open');
     document.documentElement?.classList.remove('modal-open');
     document.body?.classList.remove('modal-open');
-    document.body?.style.removeProperty('top');
-    if (wasLocked) window.scrollTo?.(0, modalScrollY);
+    const scroller = $('#appShell');
+    if (wasLocked && scroller) scroller.scrollTop = modalScrollY;
   }
 
   function repeatPresetFor(task) {
@@ -1710,6 +1718,42 @@
     node.style.removeProperty('opacity');
   }
 
+  document.addEventListener('touchstart', (event) => {
+    if (event.touches?.length !== 1) {
+      viewportTouch = null;
+      return;
+    }
+    const touch = event.touches[0];
+    viewportTouch = { x: touch.clientX, y: touch.clientY };
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (event) => {
+    if (!viewportTouch || event.touches?.length !== 1) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - viewportTouch.x;
+    const dy = touch.clientY - viewportTouch.y;
+    if (Math.abs(dy) < 7 || Math.abs(dy) <= Math.abs(dx)) return;
+
+    const modal = event.target.closest?.('.modal');
+    if (document.body?.classList.contains('modal-open') && !modal) {
+      event.preventDefault();
+      return;
+    }
+
+    const scroller = modal || $('#appShell');
+    if (!scroller) {
+      event.preventDefault();
+      return;
+    }
+    const atTop = scroller.scrollTop <= 0;
+    const atBottom = Math.ceil(scroller.scrollTop + scroller.clientHeight) >= scroller.scrollHeight;
+    if ((dy > 0 && atTop) || (dy < 0 && atBottom)) event.preventDefault();
+  }, { passive: false });
+
+  const clearViewportTouch = () => { viewportTouch = null; };
+  document.addEventListener('touchend', clearViewportTouch, { passive: true });
+  document.addEventListener('touchcancel', clearViewportTouch, { passive: true });
+
   document.addEventListener('pointerdown', (event) => {
     if (event.button != null && event.button !== 0) return;
     const strip = event.target.closest('.day-strip');
@@ -1846,7 +1890,7 @@
       const incoming = sanitizeState(JSON.parse(event.newValue));
       if ((incoming.revision || 0) <= (state.revision || 0)) return;
       state = incoming;
-      render();
+      render({ quiet: true });
       setSaveStatus('atualizado');
     } catch {
       // Ignore malformed external storage updates.
@@ -1866,7 +1910,7 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=9').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=10').catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
@@ -1894,7 +1938,7 @@
       applyAppearance();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       channel?.postMessage?.({ source: INSTANCE_ID, state });
-      render();
+      render({ quiet: true });
       setSaveStatus('sincronizado');
       return JSON.parse(JSON.stringify(state));
     },

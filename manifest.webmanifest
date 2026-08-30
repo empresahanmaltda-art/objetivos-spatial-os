@@ -5,8 +5,8 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#202225",
-  "theme_color": "#202225",
+  "background_color": "#171614",
+  "theme_color": "#171614",
   "description": "Tarefas e metas com prazo em um espaço pessoal simples e inteligente.",
   "icons": [
     {

@@ -32,6 +32,9 @@ class Element {
     this.children = [];
     this.dataset = {};
     this.style = new Style();
+    this.scrollTop = 0;
+    this.clientHeight = 800;
+    this.scrollHeight = 1600;
   }
   querySelector(selector) {
     if (this.id === 'syncStatus' && selector === 'span') return elements.statusCopy;
@@ -53,6 +56,7 @@ const elements = {
   syncStatus: new Element('syncStatus'),
   statusCopy: new Element('statusCopy'),
   bottomDock: new Element('bottomDock'),
+  appShell: new Element('appShell'),
   viewRoot: new Element('viewRoot'),
   modalLayer: new Element('modalLayer'),
   toastLayer: new Element('toastLayer'),
@@ -68,6 +72,7 @@ const selectors = {
   'meta[name="theme-color"]': elements.themeMeta,
   '#syncStatus': elements.syncStatus,
   '#bottomDock': elements.bottomDock,
+  '#appShell': elements.appShell,
   '#viewRoot': elements.viewRoot,
   '#modalLayer': elements.modalLayer,
   '#toastLayer': elements.toastLayer,
@@ -103,13 +108,17 @@ store.set('objetivos-spatial-os-v2', JSON.stringify({
   settings: {}
 }));
 
+const documentListeners = new Map();
 const document = {
   documentElement: elements.root,
   body: elements.body,
   querySelector: (selector) => selectors[selector] || null,
   querySelectorAll: () => [],
   createElement: () => new Element(),
-  addEventListener() {},
+  addEventListener(type, handler) {
+    if (!documentListeners.has(type)) documentListeners.set(type, []);
+    documentListeners.get(type).push(handler);
+  },
   visibilityState: 'visible'
 };
 
@@ -154,11 +163,19 @@ vm.runInContext(fs.readFileSync('app.js', 'utf8'), context);
 
 const appSource = fs.readFileSync('app.js', 'utf8');
 const indexSource = fs.readFileSync('index.html', 'utf8');
+const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
-assert(indexSource.includes('apple-touch-icon.png?v=9'), 'iOS home-screen icon missing');
-assert(fs.readFileSync('styles.css', 'utf8').includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
+assert(indexSource.includes('apple-touch-icon.png?v=10'), 'iOS home-screen icon missing');
+assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black"'), 'iOS status bar must not overlap app content');
+assert(stylesSource.includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
+assert(stylesSource.includes('position:fixed;inset:0;'), 'document viewport must stay fixed on iOS');
+assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top))'), 'mobile safe area padding missing');
+assert(stylesSource.includes('.workspace[data-update="animated"] .task-card'), 'task motion must be opt-in per render');
+assert(!stylesSource.includes('filter:blur(4px)'), 'task completion still uses the flickering blur effect');
+assert(appSource.includes("document.addEventListener('touchmove'"), 'iOS edge overscroll guard missing');
+assert(appSource.includes("root.dataset.update = quiet ? 'quiet' : 'animated'"), 'quiet task refresh missing');
 assert(indexSource.includes('id="authGate"'), 'login gate missing');
 assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing');
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
@@ -188,9 +205,22 @@ assert(api.tasksForDate(today).some((task) => task.title === 'Acordar'));
 assert(api.tasksForDate(tomorrow).some((task) => task.title === 'Acordar'));
 
 const wake = state.tasks.find((task) => task.title === 'Acordar');
+const navBeforeCompletion = elements.bottomDock.innerHTML;
 api.toggleTask(wake.id, today);
 assert(!api.tasksForDate(today, { includeCompleted: false }).some((task) => task.id === wake.id));
 assert(api.tasksForDate(tomorrow, { includeCompleted: false }).some((task) => task.id === wake.id));
+assert.strictEqual(elements.viewRoot.dataset.update, 'quiet', 'completion must not replay the full view animation');
+assert.strictEqual(elements.bottomDock.innerHTML, navBeforeCompletion, 'completion must not rebuild the bottom dock');
+
+let edgePullPrevented = false;
+const touchTarget = { closest: () => null };
+documentListeners.get('touchstart')[0]({ touches: [{ clientX: 100, clientY: 100 }] });
+documentListeners.get('touchmove')[0]({
+  touches: [{ clientX: 101, clientY: 132 }],
+  target: touchTarget,
+  preventDefault() { edgePullPrevented = true; }
+});
+assert(edgePullPrevented, 'pulling down at the top edge must be blocked');
 
 api.executeCommand('Adicione meditar todo dia às 06h por 15 min');
 state = api.getState();
