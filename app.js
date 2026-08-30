@@ -710,7 +710,6 @@
     save();
     render();
     haptic('select');
-    requestAnimationFrame(() => $('#viewRoot')?.focus());
   }
 
   let renderedNavView = null;
@@ -1910,7 +1909,7 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=10').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=11').catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
