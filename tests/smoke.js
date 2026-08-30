@@ -167,7 +167,7 @@ const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
-assert(indexSource.includes('apple-touch-icon.png?v=12'), 'iOS home-screen icon missing');
+assert(indexSource.includes('apple-touch-icon.png?v=13'), 'iOS home-screen icon missing');
 assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black-translucent"'), 'iOS status bar must blend into the app');
 assert(indexSource.includes('name="theme-color" content="#554e46"'), 'status-bar fallback must match the spatial background');
 assert(stylesSource.includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
@@ -190,11 +190,43 @@ let state = api.getState();
 
 assert.strictEqual(state.version, 3);
 assert.strictEqual(state.settings.theme, 'spatial');
+assert.strictEqual(state.settings.customBackground, '#302c28');
+assert.strictEqual(state.settings.customGlass, '#48423b');
+assert.strictEqual(state.settings.customModule, '#1e1c19');
+assert.strictEqual(state.settings.customGlow, '#958b7f');
+assert.strictEqual(state.settings.glassOpacity, 82);
+assert.strictEqual(state.settings.moduleOpacity, 84);
+assert.strictEqual(state.settings.glassBlur, 28);
 assert.strictEqual(state.tasks.filter((task) => task.routine).length, 26);
 assert(!state.tasks.some((task) => /^t[1-7]$/.test(task.id)), 'legacy demo tasks leaked');
 assert.deepStrictEqual(state.goals.slice(0, 4).map((goal) => goal.target), [30000, 10000, 100000, 1000000]);
 assert(state.goals.slice(0, 4).every((goal) => goal.current === 0));
 assert.strictEqual(state.goals.find((goal) => goal.id === 'custom-goal').current, 7);
+
+const originalAppearanceState = api.getState();
+api.applyCloudState({
+  ...originalAppearanceState,
+  settings: {
+    ...originalAppearanceState.settings,
+    theme: 'custom',
+    customAccent: '#ff00aa',
+    customBackground: '#123456',
+    customGlass: '#334455',
+    customModule: '#111827',
+    customGlow: '#22ccff',
+    glassOpacity: 50,
+    moduleOpacity: 60,
+    glassBlur: 12
+  }
+});
+assert.strictEqual(elements.root.dataset.theme, 'custom');
+assert.strictEqual(elements.root.style.values.get('--accent-rgb'), '255 0 170');
+assert.strictEqual(elements.root.style.values.get('--bg-b'), 'rgb(18 52 86)');
+assert(elements.root.style.values.get('--glass-a').includes('/ 0.5'));
+assert(elements.root.style.values.get('--module-a').includes('/ 0.6'));
+assert.strictEqual(elements.root.style.values.get('--glass-blur'), '12px');
+api.applyCloudState(originalAppearanceState);
+state = api.getState();
 
 const today = state.selectedDate;
 const tomorrow = (() => {
@@ -274,11 +306,18 @@ assert(stylesSource.includes('.task-options-grid{grid-template-columns:repeat(2,
 assert(stylesSource.includes('.task-modal .modal-head .modal-close{width:32px'), 'only the header close control may use icon dimensions');
 assert(!stylesSource.includes('.task-modal .modal-close{width:'), 'cancel action inherited the close icon width');
 assert(stylesSource.includes('.task-modal .modal-actions{justify-content:center'), 'task actions must be centered');
+assert(stylesSource.includes('.task-modal input[type="date"],.task-modal input[type="time"]{height:39px;min-height:39px;max-height:39px;padding-block:0;line-height:39px;font-size:13px'), 'native date and time controls must match the task field dimensions');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
+['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {
+  assert(appSource.includes(`id="${id}"`), `appearance control ${id} missing`);
+});
+assert(appSource.includes("root.style.setProperty('--glass-a'"), 'custom glass color is not applied');
+assert(appSource.includes("root.style.setProperty('--module-a'"), 'custom card color is not applied');
+assert(appSource.includes("root.style.setProperty('--bg-b'"), 'custom background color is not applied');
 assert(elements.modalLayer.innerHTML.includes('task-cancel-button'), 'cancel button needs independent sizing');
 assert(elements.modalLayer.innerHTML.includes('task-save-button'), 'save button needs independent sizing');
 assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
-assert(indexSource.includes('styles.css?v=12'), 'v12 stylesheet cache key missing');
+assert(indexSource.includes('styles.css?v=13'), 'v13 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
