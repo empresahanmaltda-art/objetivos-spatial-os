@@ -1,5 +1,5 @@
-const CACHE = 'objetivos-spatial-v18';
-const ASSETS = ['./', './index.html', './styles.css?v=18', './app.js?v=18', './cloud-config.js?v=18', './cloud-sync.js?v=18', './manifest.webmanifest?v=18', './assets/os-icon-v18-180.png', './assets/os-icon-v18-192.png', './assets/os-icon-v18-512.png'];
+const CACHE = 'objetivos-spatial-v19';
+const ASSETS = ['./', './index.html', './styles.css?v=19', './app.js?v=19', './cloud-config.js?v=19', './cloud-sync.js?v=19', './manifest.webmanifest?v=19', './assets/os-icon-v18-180.png', './assets/os-icon-v18-192.png', './assets/os-icon-v18-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
