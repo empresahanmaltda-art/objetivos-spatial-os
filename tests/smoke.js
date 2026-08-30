@@ -165,10 +165,18 @@ const appSource = fs.readFileSync('app.js', 'utf8');
 const indexSource = fs.readFileSync('index.html', 'utf8');
 const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const swSource = fs.readFileSync('sw.js', 'utf8');
+const cloudSyncSource = fs.readFileSync('cloud-sync.js', 'utf8');
+const pushSource = fs.readFileSync('supabase/functions/push-due/index.ts', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
+const pngDimensions = (path) => {
+  const file = fs.readFileSync(path);
+  assert.strictEqual(file.subarray(1, 4).toString(), 'PNG', `${path} must be a PNG`);
+  return [file.readUInt32BE(16), file.readUInt32BE(20)];
+};
 assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
-assert(indexSource.includes('apple-touch-icon.png?v=17'), 'iOS home-screen icon missing');
+assert(indexSource.includes('assets/os-icon-v18-180.png'), 'new iOS home-screen icon missing');
+assert(indexSource.includes('<span class="brand-tile"><img src="assets/os-icon-v18-192.png"'), 'new in-app icon missing');
 assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black-translucent"'), 'iOS status bar must blend into the app');
 assert(indexSource.includes('name="theme-color" content="#171614"'), 'status-bar fallback must match the dark spatial background');
 assert(stylesSource.includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
@@ -181,8 +189,11 @@ assert(appSource.includes("root.dataset.update = quiet ? 'quiet' : 'animated'"),
 assert(indexSource.includes('id="authGate"'), 'login gate missing');
 assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing');
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
-assert(manifest.icons.some((icon) => icon.src === 'assets/icon-192.png' && icon.type === 'image/png'));
-assert(manifest.icons.some((icon) => icon.src === 'assets/icon-512.png' && icon.purpose.includes('maskable')));
+assert(manifest.icons.some((icon) => icon.src === 'assets/os-icon-v18-192.png' && icon.type === 'image/png'));
+assert(manifest.icons.some((icon) => icon.src === 'assets/os-icon-v18-512.png' && icon.purpose.includes('maskable')));
+assert.deepStrictEqual(pngDimensions('assets/os-icon-v18-180.png'), [180, 180]);
+assert.deepStrictEqual(pngDimensions('assets/os-icon-v18-192.png'), [192, 192]);
+assert.deepStrictEqual(pngDimensions('assets/os-icon-v18-512.png'), [512, 512]);
 assert.strictEqual(manifest.theme_color, '#171614');
 
 const api = window.__OBJETIVOS__;
@@ -198,7 +209,13 @@ assert.strictEqual(state.settings.customGlow, '#958b7f');
 assert.strictEqual(state.settings.glassOpacity, 82);
 assert.strictEqual(state.settings.moduleOpacity, 84);
 assert.strictEqual(state.settings.glassBlur, 28);
+assert.deepStrictEqual(state.settings.savedThemes, []);
+assert.strictEqual(state.settings.defaultReminder, 30);
+assert.deepStrictEqual(state.settings.defaultReminders, [30, 0]);
+assert.strictEqual(state.settings.routineVersion, 2);
 assert.strictEqual(state.tasks.filter((task) => task.routine).length, 26);
+assert(state.tasks.filter((task) => task.title === 'Marketing').every((task) => task.time === '15:00'), 'every Marketing routine must start at 15:00');
+assert(state.tasks.filter((task) => task.time).every((task) => JSON.stringify(task.reminders) === '[30,0]'), 'every timed task needs 30-minute and exact-time alerts');
 assert(!state.tasks.some((task) => /^t[1-7]$/.test(task.id)), 'legacy demo tasks leaked');
 assert.deepStrictEqual(state.goals.slice(0, 4).map((goal) => goal.target), [30000, 10000, 100000, 1000000]);
 assert(state.goals.slice(0, 4).every((goal) => goal.current === 0));
@@ -227,6 +244,34 @@ assert(elements.root.style.values.get('--glass-a').includes('/ 0.5'));
 assert(elements.root.style.values.get('--module-a').includes('/ 0.6'));
 assert.strictEqual(elements.root.style.values.get('--glass-blur'), '12px');
 api.applyCloudState(originalAppearanceState);
+state = api.getState();
+
+const savedAppearanceState = api.getState();
+api.applyCloudState({
+  ...savedAppearanceState,
+  settings: {
+    ...savedAppearanceState.settings,
+    theme: 'saved:night-orbit',
+    savedThemes: [{
+      id: 'night-orbit',
+      label: 'Órbita noturna',
+      accent: '#d9e7ff',
+      background: '#10131a',
+      glass: '#202631',
+      module: '#090b10',
+      glow: '#f0b788',
+      intensity: 74,
+      glassOpacity: 71,
+      moduleOpacity: 91,
+      glassBlur: 33
+    }]
+  }
+});
+assert.strictEqual(elements.root.dataset.theme, 'saved');
+assert.strictEqual(elements.root.style.values.get('--accent-rgb'), '217 231 255');
+assert.strictEqual(elements.root.style.values.get('--glass-blur'), '33px');
+assert.strictEqual(api.getState().settings.savedThemes[0].label, 'Órbita noturna');
+api.applyCloudState(savedAppearanceState);
 state = api.getState();
 
 const today = state.selectedDate;
@@ -308,7 +353,8 @@ assert(stylesSource.includes('.task-options-grid{grid-template-columns:repeat(2,
 assert(stylesSource.includes('.task-modal .modal-head .modal-close{width:32px'), 'only the header close control may use icon dimensions');
 assert(!stylesSource.includes('.task-modal .modal-close{width:'), 'cancel action inherited the close icon width');
 assert(stylesSource.includes('.task-modal .modal-actions{justify-content:center'), 'task actions must be centered');
-assert(stylesSource.includes('.task-modal .task-title-field input{height:35px;min-height:35px;max-height:35px;font-size:13px'), 'task title field must keep the approved compact height');
+assert(stylesSource.includes('.task-modal .task-title-field input{height:35px;min-height:35px;max-height:35px}'), 'task title field must keep the approved compact height');
+assert(stylesSource.includes('.modal select,.modal textarea,.command-input{font-size:16px!important;touch-action:manipulation}'), 'mobile form controls must stay at 16px to prevent iOS focus zoom');
 assert(stylesSource.includes('.modal.task-modal{width:min(310px,100%);height:min(380px,68dvh)'), 'task modal must keep its approved fixed mobile size');
 assert(stylesSource.includes('.task-core-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:8px;width:100%;min-width:0;max-width:100%;overflow:hidden'), 'date and time grid must never overflow the task field width');
 assert(stylesSource.includes('.task-modal .native-picker-control{height:32px!important;min-height:32px!important;max-height:32px!important'), 'visible date and time shells must use the corrected iOS height');
@@ -323,10 +369,22 @@ assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile m
 assert(appSource.includes("root.style.setProperty('--glass-a'"), 'custom glass color is not applied');
 assert(appSource.includes("root.style.setProperty('--module-a'"), 'custom card color is not applied');
 assert(appSource.includes("root.style.setProperty('--bg-b'"), 'custom background color is not applied');
+assert(appSource.includes('id="saveThemePresetBtn"'), 'custom appearance preset save control missing');
+assert(appSource.includes('data-saved-theme-choice'), 'saved appearance presets cannot be selected');
+assert(appSource.includes('data-delete-saved-theme'), 'saved appearance presets cannot be removed');
+assert(stylesSource.includes('.modal::-webkit-scrollbar{display:none'), 'native modal scrollbar must stay hidden');
+assert(stylesSource.includes('.modal-scroll-indicator.active{opacity:'), 'transient modal scroll indicator missing');
+assert(appSource.includes("setTimeout(() => indicator.classList.remove('active'), 620)"), 'modal scroll indicator must disappear after scrolling');
+assert(appSource.includes('globalThis.OBJETIVOS_PUSH_ACTIVE !== false'), 'local notifications must pause when server push is active or unresolved');
+assert(cloudSyncSource.includes('window.OBJETIVOS_PUSH_ACTIVE = runtime.pushActive'), 'push subscription state must be shared with the local notification fallback');
+assert(pushSource.includes('const reminderMinutes = [30, 0]'), 'server push must send 30-minute and exact-time reminders');
+assert(pushSource.includes('task-${task.id}-${date}-${minutesBefore}'), 'server push delivery tags must be unique per reminder stage');
+assert(swSource.includes('self.registration.getNotifications({ tag })'), 'service worker must close duplicate notifications before displaying one');
 assert(elements.modalLayer.innerHTML.includes('task-cancel-button'), 'cancel button needs independent sizing');
 assert(elements.modalLayer.innerHTML.includes('task-save-button'), 'save button needs independent sizing');
+assert(elements.modalLayer.innerHTML.includes('30 min antes + na hora'), 'task form must show the fixed dual reminder schedule');
 assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
-assert(indexSource.includes('styles.css?v=17'), 'v17 stylesheet cache key missing');
+assert(indexSource.includes('styles.css?v=18'), 'v18 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
