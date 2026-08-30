@@ -200,7 +200,7 @@ const api = window.__OBJETIVOS__;
 assert(api, 'public test API missing');
 let state = api.getState();
 
-assert.strictEqual(state.version, 3);
+assert.strictEqual(state.version, 4);
 assert.strictEqual(state.settings.theme, 'spatial');
 assert.strictEqual(state.settings.customBackground, '#302c28');
 assert.strictEqual(state.settings.customGlass, '#48423b');
@@ -212,8 +212,13 @@ assert.strictEqual(state.settings.glassBlur, 28);
 assert.deepStrictEqual(state.settings.savedThemes, []);
 assert.strictEqual(state.settings.defaultReminder, 30);
 assert.deepStrictEqual(state.settings.defaultReminders, [30, 0]);
-assert.strictEqual(state.settings.routineVersion, 2);
+assert.strictEqual(state.settings.routineVersion, 3);
+assert.strictEqual(state.selectedProject, 'routine');
+assert(/^\d{4}-\d{2}-01$/.test(state.plannerMonth), 'planner month must be normalized');
 assert.strictEqual(state.tasks.filter((task) => task.routine).length, 26);
+assert.strictEqual(state.tasks.filter((task) => task.projectId === 'gym').length, 11);
+assert.strictEqual(state.tasks.filter((task) => task.projectId === 'routine').length, 15);
+assert(state.tasks.every((task) => ['routine', 'gym'].includes(task.projectId)), 'every task must belong to a project');
 assert(state.tasks.filter((task) => task.title === 'Marketing').every((task) => task.time === '15:00'), 'every Marketing routine must start at 15:00');
 assert(state.tasks.filter((task) => task.time).every((task) => JSON.stringify(task.reminders) === '[30,0]'), 'every timed task needs 30-minute and exact-time alerts');
 assert(!state.tasks.some((task) => /^t[1-7]$/.test(task.id)), 'legacy demo tasks leaked');
@@ -343,6 +348,7 @@ assert.strictEqual(elements.themeMeta.content, '#111315', 'an open modal must da
 assert(elements.modalLayer.innerHTML.includes('class="task-core-grid"'), 'compact task core grid missing');
 assert(elements.modalLayer.innerHTML.includes('class="task-options-grid"'), 'compact task options grid missing');
 assert(elements.modalLayer.innerHTML.includes('<details class="task-advanced"'), 'advanced task fields are not collapsible');
+assert(elements.modalLayer.innerHTML.includes('<label>Projeto</label>'), 'task project selector missing');
 assert(elements.modalLayer.innerHTML.indexOf('<label>Duração</label>') > elements.modalLayer.innerHTML.indexOf('<details class="task-advanced"'), 'duration must stay inside compact advanced options');
 assert(!elements.modalLayer.innerHTML.includes('<div class="input-grid">'), 'legacy oversized task form leaked');
 
@@ -358,6 +364,15 @@ assert(stylesSource.includes('.modal select,.modal textarea,.command-input{font-
 assert(stylesSource.includes('.modal.task-modal{width:min(310px,100%);height:min(380px,68dvh)'), 'task modal must keep its approved fixed mobile size');
 assert(stylesSource.includes('.task-core-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:8px;width:100%;min-width:0;max-width:100%;overflow:hidden'), 'date and time grid must never overflow the task field width');
 assert(stylesSource.includes('.task-modal .native-picker-control{height:32px!important;min-height:32px!important;max-height:32px!important'), 'visible date and time shells must use the corrected iOS height');
+assert(elements.bottomDock.innerHTML.includes('Projetos'), 'project navigation label missing');
+assert(appSource.includes("'Rotina Milionária'"), 'routine project missing');
+assert(appSource.includes("'Projeto GYM — Greko Romano'"), 'gym project missing');
+assert(appSource.includes('function plannerCalendar()'), 'compact project calendar missing');
+assert(!appSource.includes('Os próximos 14 dias'), 'legacy repeated upcoming-day view leaked');
+assert(stylesSource.includes('left:0;bottom:0;transform:none;'), 'mobile dock must cover the bottom safe area');
+assert(stylesSource.includes('padding:15px 12px calc(82px + env(safe-area-inset-bottom))'), 'dock clearance must stay inside the main panel');
+assert(indexSource.includes('styles.css?v=19') && indexSource.includes('app.js?v=19'), 'v19 assets must bypass the old PWA cache');
+assert(swSource.includes("objetivos-spatial-v19"), 'v19 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
@@ -384,7 +399,7 @@ assert(elements.modalLayer.innerHTML.includes('task-cancel-button'), 'cancel but
 assert(elements.modalLayer.innerHTML.includes('task-save-button'), 'save button needs independent sizing');
 assert(elements.modalLayer.innerHTML.includes('30 min antes + na hora'), 'task form must show the fixed dual reminder schedule');
 assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
-assert(indexSource.includes('styles.css?v=18'), 'v18 stylesheet cache key missing');
+assert(indexSource.includes('styles.css?v=19'), 'v19 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
