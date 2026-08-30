@@ -1,5 +1,5 @@
-const CACHE = 'objetivos-spatial-v16';
-const ASSETS = ['./', './index.html', './styles.css?v=16', './app.js?v=16', './cloud-config.js?v=16', './cloud-sync.js?v=16', './manifest.webmanifest?v=16', './assets/icon.svg?v=16', './assets/apple-touch-icon.png?v=16', './assets/icon-192.png', './assets/icon-512.png'];
+const CACHE = 'objetivos-spatial-v17';
+const ASSETS = ['./', './index.html', './styles.css?v=17', './app.js?v=17', './cloud-config.js?v=17', './cloud-sync.js?v=17', './manifest.webmanifest?v=17', './assets/icon.svg?v=17', './assets/apple-touch-icon.png?v=17', './assets/icon-192.png', './assets/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -16,7 +16,18 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request).catch(() => caches.match('./index.html')));
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request, { cache: 'no-store' });
+        if (response.ok) {
+          const cache = await caches.open(CACHE);
+          await cache.put('./index.html', response.clone());
+        }
+        return response;
+      } catch {
+        return caches.match('./index.html');
+      }
+    })());
     return;
   }
   if (new URL(event.request.url).origin !== self.location.origin) return;

@@ -164,10 +164,11 @@ vm.runInContext(fs.readFileSync('app.js', 'utf8'), context);
 const appSource = fs.readFileSync('app.js', 'utf8');
 const indexSource = fs.readFileSync('index.html', 'utf8');
 const stylesSource = fs.readFileSync('styles.css', 'utf8');
+const swSource = fs.readFileSync('sw.js', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
-assert(indexSource.includes('apple-touch-icon.png?v=16'), 'iOS home-screen icon missing');
+assert(indexSource.includes('apple-touch-icon.png?v=17'), 'iOS home-screen icon missing');
 assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black-translucent"'), 'iOS status bar must blend into the app');
 assert(indexSource.includes('name="theme-color" content="#171614"'), 'status-bar fallback must match the dark spatial background');
 assert(stylesSource.includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
@@ -309,9 +310,12 @@ assert(!stylesSource.includes('.task-modal .modal-close{width:'), 'cancel action
 assert(stylesSource.includes('.task-modal .modal-actions{justify-content:center'), 'task actions must be centered');
 assert(stylesSource.includes('.task-modal .task-title-field input{height:35px;min-height:35px;max-height:35px;font-size:13px'), 'task title field must keep the approved compact height');
 assert(stylesSource.includes('.modal.task-modal{width:min(310px,100%);height:min(380px,68dvh)'), 'task modal must keep its approved fixed mobile size');
-assert(stylesSource.includes('.task-modal .native-picker-control{height:35px;min-height:35px;max-height:35px'), 'visible date and time shells must match the task field');
+assert(stylesSource.includes('.task-core-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:8px;width:100%;min-width:0;max-width:100%;overflow:hidden'), 'date and time grid must never overflow the task field width');
+assert(stylesSource.includes('.task-modal .native-picker-control{height:32px!important;min-height:32px!important;max-height:32px!important'), 'visible date and time shells must use the corrected iOS height');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
+assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
+assert(swSource.includes("fetch(event.request, { cache: 'no-store' })"), 'PWA navigation must bypass stale iOS caches');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
 ['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {
   assert(appSource.includes(`id="${id}"`), `appearance control ${id} missing`);
@@ -322,7 +326,7 @@ assert(appSource.includes("root.style.setProperty('--bg-b'"), 'custom background
 assert(elements.modalLayer.innerHTML.includes('task-cancel-button'), 'cancel button needs independent sizing');
 assert(elements.modalLayer.innerHTML.includes('task-save-button'), 'save button needs independent sizing');
 assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
-assert(indexSource.includes('styles.css?v=16'), 'v16 stylesheet cache key missing');
+assert(indexSource.includes('styles.css?v=17'), 'v17 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
