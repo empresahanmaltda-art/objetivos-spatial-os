@@ -167,7 +167,7 @@ const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
-assert(indexSource.includes('apple-touch-icon.png?v=13'), 'iOS home-screen icon missing');
+assert(indexSource.includes('apple-touch-icon.png?v=14'), 'iOS home-screen icon missing');
 assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black-translucent"'), 'iOS status bar must blend into the app');
 assert(indexSource.includes('name="theme-color" content="#554e46"'), 'status-bar fallback must match the spatial background');
 assert(stylesSource.includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
@@ -306,7 +306,8 @@ assert(stylesSource.includes('.task-options-grid{grid-template-columns:repeat(2,
 assert(stylesSource.includes('.task-modal .modal-head .modal-close{width:32px'), 'only the header close control may use icon dimensions');
 assert(!stylesSource.includes('.task-modal .modal-close{width:'), 'cancel action inherited the close icon width');
 assert(stylesSource.includes('.task-modal .modal-actions{justify-content:center'), 'task actions must be centered');
-assert(stylesSource.includes('.task-modal input[type="date"],.task-modal input[type="time"]{height:39px;min-height:39px;max-height:39px;padding-block:0;line-height:39px;font-size:13px'), 'native date and time controls must match the task field dimensions');
+assert(stylesSource.includes('.task-modal .task-title-field input{height:35px;min-height:35px;max-height:35px;font-size:13px'), 'task title field must keep the approved compact height');
+assert(stylesSource.includes('.task-modal input[type="date"],.task-modal input[type="time"]{height:35px;min-height:35px;max-height:35px;padding-block:0;line-height:35px;font-size:13px'), 'native date and time controls must match the task field dimensions');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
 ['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {
   assert(appSource.includes(`id="${id}"`), `appearance control ${id} missing`);
@@ -317,7 +318,7 @@ assert(appSource.includes("root.style.setProperty('--bg-b'"), 'custom background
 assert(elements.modalLayer.innerHTML.includes('task-cancel-button'), 'cancel button needs independent sizing');
 assert(elements.modalLayer.innerHTML.includes('task-save-button'), 'save button needs independent sizing');
 assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
-assert(indexSource.includes('styles.css?v=13'), 'v13 stylesheet cache key missing');
+assert(indexSource.includes('styles.css?v=14'), 'v14 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
