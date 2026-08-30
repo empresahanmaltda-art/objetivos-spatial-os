@@ -549,7 +549,7 @@ body.auth-locked .app-shell{opacity:0;visibility:hidden;pointer-events:none;tran
 .modal form,.modal .field,.modal input,.modal select,.modal textarea{min-width:0;max-width:100%}
 .modal.task-modal{width:min(430px,calc(100% - 20px));max-height:min(72dvh,540px);padding:14px}
 .task-modal .modal-head{margin-bottom:10px}
-.task-modal .modal-close{width:36px;height:36px}
+.task-modal .modal-head .modal-close{width:36px;height:36px}
 .task-form-compact{display:grid;gap:8px;min-width:0}
 .task-title-field input{min-height:43px;font-size:14px}
 .task-core-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:8px}
@@ -569,13 +569,16 @@ body.auth-locked .app-shell{opacity:0;visibility:hidden;pointer-events:none;tran
 .task-advanced-content>.repeat-editor,.task-advanced-content>.field:first-of-type{margin-top:10px}
 .task-modal .repeat-editor{padding:9px;border-radius:14px}
 .task-modal .field textarea{min-height:62px}
-.task-modal .modal-actions{margin-top:9px}
+.task-modal .modal-actions{justify-content:center;margin-top:9px}
+.task-modal .modal-actions>button{flex:0 0 auto;margin:0}
+.task-modal .task-cancel-button{min-width:88px}
+.task-modal .task-save-button{min-width:128px}
 .modal.command-modal{width:min(680px,100%)}
 @keyframes modalIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
 .modal-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:17px}
 .modal-head h2{font-size:19px;margin:0;letter-spacing:-.025em}
 .modal-head p{margin:5px 0 0;color:var(--muted);font-size:9px;line-height:1.5}
-.modal-close{margin-left:auto}
+.modal-head>.modal-close{margin-left:auto}
 .input-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .field{display:grid;gap:6px}
 .field.full{grid-column:1/-1}
@@ -733,18 +736,21 @@ html[data-motion="off"] *,html[data-motion="off"] *::before,html[data-motion="of
     bottom:calc(max(6px,env(safe-area-inset-bottom)) + 65px);
     width:44px;height:44px;border-radius:15px;
   }
-  .modal-layer{padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom))}
+  .modal-layer{
+    padding:calc(10px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  }
   .modal{padding:17px;border-radius:24px;max-height:88dvh}
-  .modal.task-modal{width:min(380px,calc(100vw - 48px));max-height:min(62dvh,440px);padding:11px;border-radius:19px}
+  .modal.task-modal{width:min(310px,100%);max-height:min(68dvh,440px);padding:11px;border-radius:19px}
   .task-modal .modal-head{margin-bottom:7px}
   .task-modal .modal-head h2{font-size:15px}
   .task-modal .modal-head p,.task-modal .form-note{display:none}
-  .task-modal .modal-close{width:32px;height:32px;border-radius:12px}
+  .task-modal .modal-head .modal-close{width:32px;height:32px;border-radius:12px}
   .task-modal .task-title-field input{min-height:39px;font-size:13px}
-  .task-core-grid,.task-options-grid{grid-template-columns:minmax(0,1fr);gap:7px}
+  .task-core-grid{grid-template-columns:minmax(0,1fr);gap:7px}
+  .task-options-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .task-modal .field{gap:4px}
   .task-modal .field input,.task-modal .field select{min-height:35px;padding:6px 8px;border-radius:11px}
-  .task-modal .modal-actions{position:static;min-width:0;margin-top:8px;padding:0;background:none;flex-wrap:nowrap}
+  .task-modal .modal-actions{position:static;min-width:0;margin-top:8px;padding:0;background:none;flex-wrap:wrap}
   .task-modal .modal-actions .primary-button,.task-modal .modal-actions .soft-button,.task-modal .modal-actions .danger-button{min-height:32px;padding-inline:9px}
   .task-advanced summary small{display:none}
   .input-grid{grid-template-columns:1fr}

@@ -67,10 +67,10 @@
   }
 
   const themePresets = {
-    spatial: { label: 'Spatial', accent: '#79aef0', ambient: '#958b7f', themeColor: '#302c28' },
-    warm: { label: 'Quente', accent: '#ff9b61', ambient: '#9b7259', themeColor: '#29231f' },
-    cold: { label: 'Frio', accent: '#72d7f2', ambient: '#456a86', themeColor: '#151d24' },
-    sexy: { label: 'Sexy', accent: '#ff5d91', ambient: '#6d294f', themeColor: '#21151d' }
+    spatial: { label: 'Spatial', accent: '#79aef0', ambient: '#958b7f', themeColor: '#554e46' },
+    warm: { label: 'Quente', accent: '#ff9b61', ambient: '#9b7259', themeColor: '#4a4138' },
+    cold: { label: 'Frio', accent: '#72d7f2', ambient: '#456a86', themeColor: '#243846' },
+    sexy: { label: 'Sexy', accent: '#ff5d91', ambient: '#6d294f', themeColor: '#3b2433' }
   };
 
   const weekdayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
@@ -967,7 +967,8 @@
     layer.innerHTML = `<section class="modal glass ${className}" role="dialog" aria-modal="true">${content}</section>`;
     requestAnimationFrame(() => {
       const firstField = $('input:not([type="hidden"]),textarea,select', layer);
-      (firstField || $('button', layer))?.focus();
+      const mobileClose = window.matchMedia?.('(max-width:760px)')?.matches ? $('.modal-head .modal-close', layer) : null;
+      (mobileClose || firstField || $('button', layer))?.focus({ preventScroll: true });
     });
   }
 
@@ -1120,8 +1121,8 @@
         </div>
         <div class="modal-actions">
           ${task ? '<button class="danger-button" id="deleteTaskBtn" type="button">Excluir</button>' : ''}
-          <button class="soft-button modal-close" type="button">Cancelar</button>
-          <button class="primary-button" type="submit">Salvar tarefa</button>
+          <button class="soft-button modal-close task-cancel-button" type="button">Cancelar</button>
+          <button class="primary-button task-save-button" type="submit">Salvar tarefa</button>
         </div>
       </form>
     `, 'task-modal');
@@ -1909,7 +1910,7 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=11').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=12').catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
