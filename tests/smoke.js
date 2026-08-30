@@ -167,9 +167,9 @@ const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
-assert(indexSource.includes('apple-touch-icon.png?v=14'), 'iOS home-screen icon missing');
+assert(indexSource.includes('apple-touch-icon.png?v=15'), 'iOS home-screen icon missing');
 assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black-translucent"'), 'iOS status bar must blend into the app');
-assert(indexSource.includes('name="theme-color" content="#554e46"'), 'status-bar fallback must match the spatial background');
+assert(indexSource.includes('name="theme-color" content="#171614"'), 'status-bar fallback must match the dark spatial background');
 assert(stylesSource.includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
 assert(stylesSource.includes('position:fixed;inset:0;'), 'document viewport must stay fixed on iOS');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top))'), 'mobile safe area padding missing');
@@ -182,7 +182,7 @@ assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing')
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
 assert(manifest.icons.some((icon) => icon.src === 'assets/icon-192.png' && icon.type === 'image/png'));
 assert(manifest.icons.some((icon) => icon.src === 'assets/icon-512.png' && icon.purpose.includes('maskable')));
-assert.strictEqual(manifest.theme_color, '#554e46');
+assert.strictEqual(manifest.theme_color, '#171614');
 
 const api = window.__OBJETIVOS__;
 assert(api, 'public test API missing');
@@ -293,6 +293,7 @@ elements.quickAdd.onclick();
 assert(elements.modalLayer.innerHTML.includes('modal glass task-modal'), 'compact task modal class missing');
 assert(elements.root.classList.contains('modal-open'), 'modal must lock the app viewport');
 assert(elements.body.classList.contains('modal-open'), 'modal must lock background scrolling');
+assert.strictEqual(elements.themeMeta.content, '#111315', 'an open modal must darken the iOS status bar with the app');
 assert(elements.modalLayer.innerHTML.includes('class="task-core-grid"'), 'compact task core grid missing');
 assert(elements.modalLayer.innerHTML.includes('class="task-options-grid"'), 'compact task options grid missing');
 assert(elements.modalLayer.innerHTML.includes('<details class="task-advanced"'), 'advanced task fields are not collapsible');
@@ -318,7 +319,7 @@ assert(appSource.includes("root.style.setProperty('--bg-b'"), 'custom background
 assert(elements.modalLayer.innerHTML.includes('task-cancel-button'), 'cancel button needs independent sizing');
 assert(elements.modalLayer.innerHTML.includes('task-save-button'), 'save button needs independent sizing');
 assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
-assert(indexSource.includes('styles.css?v=14'), 'v14 stylesheet cache key missing');
+assert(indexSource.includes('styles.css?v=15'), 'v15 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
