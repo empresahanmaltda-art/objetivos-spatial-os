@@ -44,6 +44,11 @@
     return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(parseISO(value)).replace('.', '');
   }
 
+  function formatPickerDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return '';
+    return new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' }).format(parseISO(value));
+  }
+
   function formatDayLabel(value) {
     const today = localISO();
     if (value === today) return 'Hoje';
@@ -1103,8 +1108,8 @@
         <div class="task-form-compact">
           <div class="field task-title-field"><label>Tarefa</label><input name="title" required maxlength="150" value="${esc(task?.title || '')}" placeholder="O que precisa ser feito?" /><small class="form-note">Você também pode escrever: “russo todo dia às 21:45 por 75 min”.</small></div>
           <div class="task-core-grid">
-            <div class="field task-date-field"><label>Data</label><input name="date" type="date" required value="${esc(date)}" /></div>
-            <div class="field"><label>Horário</label><input name="time" type="time" value="${esc(task?.time || '')}" /></div>
+            <div class="field task-date-field"><label>Data</label><div class="native-picker-control"><span class="native-picker-value" id="taskDateDisplay" aria-hidden="true">${esc(formatPickerDate(date))}</span><input id="taskDateInput" name="date" type="date" required value="${esc(date)}" aria-label="Data" /></div></div>
+            <div class="field"><label>Horário</label><div class="native-picker-control"><span class="native-picker-value ${task?.time ? '' : 'empty'}" id="taskTimeDisplay" aria-hidden="true">${esc(task?.time || '')}</span><input id="taskTimeInput" name="time" type="time" value="${esc(task?.time || '')}" aria-label="Horário" /></div></div>
           </div>
           <div class="task-options-grid">
             <div class="field"><label>Repetição</label><select name="repeatPreset" id="repeatPreset">
@@ -1165,6 +1170,21 @@
         </div>
       </form>
     `, 'task-modal');
+    const bindNativePickerDisplay = (inputId, displayId, formatter = (value) => value) => {
+      const input = $(`#${inputId}`);
+      const display = $(`#${displayId}`);
+      if (!input || !display) return;
+      const sync = () => {
+        const value = formatter(input.value);
+        display.textContent = value;
+        display.classList.toggle('empty', !value);
+      };
+      input.addEventListener('input', sync);
+      input.addEventListener('change', sync);
+      sync();
+    };
+    bindNativePickerDisplay('taskDateInput', 'taskDateDisplay', formatPickerDate);
+    bindNativePickerDisplay('taskTimeInput', 'taskTimeDisplay');
     $('#repeatPreset').onchange = updateRepeatEditor;
     $('#repeatUnit').onchange = updateRepeatEditor;
     $('#taskForm').onsubmit = (event) => {
@@ -2000,7 +2020,7 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=15').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=16').catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
