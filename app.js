@@ -2020,7 +2020,15 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=16').catch(() => {});
+    let pwaReloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (pwaReloading) return;
+      pwaReloading = true;
+      const freshUrl = new URL(location.href);
+      freshUrl.searchParams.set('build', '17');
+      location.replace(freshUrl.href);
+    });
+    navigator.serviceWorker.register('./sw.js?v=17').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
