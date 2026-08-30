@@ -167,8 +167,9 @@ const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
-assert(indexSource.includes('apple-touch-icon.png?v=11'), 'iOS home-screen icon missing');
-assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black"'), 'iOS status bar must not overlap app content');
+assert(indexSource.includes('apple-touch-icon.png?v=12'), 'iOS home-screen icon missing');
+assert(indexSource.includes('apple-mobile-web-app-status-bar-style" content="black-translucent"'), 'iOS status bar must blend into the app');
+assert(indexSource.includes('name="theme-color" content="#554e46"'), 'status-bar fallback must match the spatial background');
 assert(stylesSource.includes('body.auth-locked{height:100dvh;overflow:hidden'), 'login viewport must stay fixed');
 assert(stylesSource.includes('position:fixed;inset:0;'), 'document viewport must stay fixed on iOS');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top))'), 'mobile safe area padding missing');
@@ -181,6 +182,7 @@ assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing')
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
 assert(manifest.icons.some((icon) => icon.src === 'assets/icon-192.png' && icon.type === 'image/png'));
 assert(manifest.icons.some((icon) => icon.src === 'assets/icon-512.png' && icon.purpose.includes('maskable')));
+assert.strictEqual(manifest.theme_color, '#554e46');
 
 const api = window.__OBJETIVOS__;
 assert(api, 'public test API missing');
@@ -267,9 +269,16 @@ assert(!elements.modalLayer.innerHTML.includes('<div class="input-grid">'), 'leg
 
 assert(!stylesSource.includes('position:sticky'), 'top bar must scroll with the page');
 assert(stylesSource.includes('.workspace:focus{outline:none}'), 'workspace must not show a native focus ring');
-assert(stylesSource.includes('.task-core-grid,.task-options-grid{grid-template-columns:minmax(0,1fr)'), 'mobile task fields must stack without overlapping');
+assert(stylesSource.includes('.task-core-grid{grid-template-columns:minmax(0,1fr)'), 'mobile date and time fields must stack without overlapping');
+assert(stylesSource.includes('.task-options-grid{grid-template-columns:repeat(2,minmax(0,1fr))'), 'mobile options must stay compact');
+assert(stylesSource.includes('.task-modal .modal-head .modal-close{width:32px'), 'only the header close control may use icon dimensions');
+assert(!stylesSource.includes('.task-modal .modal-close{width:'), 'cancel action inherited the close icon width');
+assert(stylesSource.includes('.task-modal .modal-actions{justify-content:center'), 'task actions must be centered');
+assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
+assert(elements.modalLayer.innerHTML.includes('task-cancel-button'), 'cancel button needs independent sizing');
+assert(elements.modalLayer.innerHTML.includes('task-save-button'), 'save button needs independent sizing');
 assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
-assert(indexSource.includes('styles.css?v=11'), 'v11 stylesheet cache key missing');
+assert(indexSource.includes('styles.css?v=12'), 'v12 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
