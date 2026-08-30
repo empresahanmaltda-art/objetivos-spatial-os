@@ -4,7 +4,7 @@
   const STORAGE_KEY = 'objetivos-spatial-os-v2';
   const LEGACY_KEY = 'objetivos-spatial-os-v1';
   const CHANNEL_NAME = 'objetivos-spatial-os-sync';
-  const ROUTINE_VERSION = 2;
+  const ROUTINE_VERSION = 3;
   const REMINDER_MINUTES = [30, 0];
   const NOTIFICATION_LOG_KEY = 'objetivos-spatial-os-notifications-v1';
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -110,6 +110,21 @@
   }
 
   const weekdayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const taskProjects = [
+    { id: 'routine', title: 'Rotina Milionária', shortTitle: 'Rotina', description: 'Estudo, trabalho e execução diária.', icon: '✦' },
+    { id: 'gym', title: 'Projeto GYM — Greko Romano', shortTitle: 'GYM', description: 'Treinos, refeições e recuperação.', icon: '◉' }
+  ];
+  const taskProjectIds = new Set(taskProjects.map((project) => project.id));
+  const gymRoutineKeys = new Set([
+    'breakfast', 'lunch', 'snack', 'meal-four', 'meal-five', 'dinner', 'supper',
+    'body-main', 'body-tue', 'body-fri', 'meal-prep'
+  ]);
+
+  function projectForTask(task = {}) {
+    const routineKey = String(task.id || '').match(/^routine-v\d+-(.+)$/)?.[1] || '';
+    const projectId = taskProjectIds.has(task.projectId) ? task.projectId : gymRoutineKeys.has(routineKey) ? 'gym' : 'routine';
+    return taskProjects.find((project) => project.id === projectId) || taskProjects[0];
+  }
 
   function weeklyRepeat(days, mode = 'scheduled') {
     return { type: 'week', interval: 1, days: [...days], mode, endDate: '' };
@@ -129,6 +144,7 @@
       recurrence: repeat.type === 'day' ? 'daily' : 'custom',
       repeat: { ...repeat, days: [...(repeat.days || [])] },
       goalId: '',
+      projectId: gymRoutineKeys.has(id) ? 'gym' : 'routine',
       notes,
       reminder: REMINDER_MINUTES[0],
       reminders: [...REMINDER_MINUTES],
@@ -243,9 +259,11 @@
     const settings = defaultSettings();
     settings.routineVersion = ROUTINE_VERSION;
     return {
-      version: 3,
+      version: 4,
       view: 'today',
       selectedDate: localISO(),
+      selectedProject: 'routine',
+      plannerMonth: localISO().slice(0, 7) + '-01',
       lastSystemDate: localISO(),
       tasks: seedRoutine(),
       goals: seedGoals(),
@@ -288,6 +306,7 @@
       recurrence: repeat ? (repeat.type === 'day' && repeat.interval === 1 ? 'daily' : 'custom') : 'none',
       repeat,
       goalId: task.goalId || '',
+      projectId: projectForTask(task).id,
       notes: String(task.notes || ''),
       reminder: time ? REMINDER_MINUTES[0] : null,
       reminders: time ? [...REMINDER_MINUTES] : [],
@@ -385,9 +404,11 @@
     const next = {
       ...base,
       ...input,
-      version: 3,
+      version: 4,
       view: ['today', 'upcoming', 'goals'].includes(input.view) ? input.view : 'today',
       selectedDate: /^\d{4}-\d{2}-\d{2}$/.test(input.selectedDate || '') ? input.selectedDate : localISO(),
+      selectedProject: taskProjectIds.has(input.selectedProject) ? input.selectedProject : 'routine',
+      plannerMonth: /^\d{4}-\d{2}-01$/.test(input.plannerMonth || '') ? input.plannerMonth : localISO().slice(0, 7) + '-01',
       lastSystemDate: storedSystemDate || localISO(),
       tasks: Array.isArray(input.tasks) ? input.tasks.map(sanitizeTask) : [],
       goals,
@@ -757,6 +778,7 @@
       recurrence: repeat ? (repeat.type === 'day' && repeat.interval === 1 ? 'daily' : 'custom') : 'none',
       repeat,
       goalId: data.goalId || '',
+      projectId: taskProjectIds.has(data.projectId) ? data.projectId : existing?.projectId || 'routine',
       notes: String(data.notes || '').trim(),
       reminder: time ? REMINDER_MINUTES[0] : null,
       reminders: time ? [...REMINDER_MINUTES] : [],
@@ -795,7 +817,7 @@
 
   const navItems = [
     { id: 'today', icon: '◷', label: 'Hoje' },
-    { id: 'upcoming', icon: '▤', label: 'Em breve' },
+    { id: 'upcoming', icon: '▦', label: 'Projetos' },
     { id: 'goals', icon: '◎', label: 'Metas' }
   ];
 
@@ -879,10 +901,10 @@
     setTimeout(() => toggleTask(taskId, date), 260);
   }
 
-  function taskCard(task, date, { overdue = false, completed = false } = {}) {
+  function taskCard(task, date, { overdue = false, completed = false, showDate = false, scheduleText = '' } = {}) {
     const goal = goalById(task.goalId);
-    const recurrence = recurrenceLabel(task);
-    const taskDate = overdue ? formatShortDate(task.date) : '';
+    const recurrence = scheduleText || recurrenceLabel(task);
+    const taskDate = overdue ? formatShortDate(task.date) : showDate ? formatShortDate(date) : '';
     const time = task.time || 'sem horário';
     return `
       <article class="task-card ${overdue ? 'overdue' : ''} ${completed ? 'completed' : ''}" data-task-id="${task.id}" data-task-date="${date}" data-swipe-left="${esc(state.settings.swipeLeft)}" data-swipe-right="${esc(state.settings.swipeRight)}">
@@ -964,7 +986,7 @@
             <span>${pending.length ? esc(formatDuration(totalMinutes)) : 'sem pendências'}</span>
           </div>
           <div class="summary-actions">
-            <button class="chip-button" data-view="upcoming" type="button">Ver próximos dias</button>
+            <button class="chip-button" data-view="upcoming" type="button">Calendário e projetos</button>
           </div>
         </div>
 
@@ -974,24 +996,99 @@
     `;
   }
 
-  function renderUpcoming() {
-    const days = Array.from({ length: 14 }, (_, index) => addDays(localISO(), index));
+  function nextPendingTaskDate(task, start = localISO()) {
+    const repeat = task.repeat || normalizeRepeat(task);
+    if (!repeat) return task.completedAt ? null : task.date;
+    const firstDate = task.date > start ? task.date : start;
+    for (let index = 0; index <= 730; index += 1) {
+      const date = addDays(firstDate, index);
+      if (isTaskOnDate(task, date) && !isTaskDone(task, date)) return date;
+    }
+    return null;
+  }
+
+  function plannerCalendar() {
+    const first = parseISO(state.plannerMonth);
+    const monthTitle = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(first);
+    const leading = (first.getDay() + 6) % 7;
+    const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+    const cells = Array.from({ length: leading + daysInMonth }, (_, index) => index < leading ? null : addDays(state.plannerMonth, index - leading));
+    while (cells.length % 7) cells.push(null);
     return `
-      <div class="view-enter">
-        ${viewHead('Agenda', 'Em breve', 'Os próximos 14 dias em uma visão compacta.', '<button class="primary-button" data-action="addTask" type="button">+ <span>Tarefa</span></button>')}
-        <div class="upcoming-stack">
-          ${days.map((date) => {
-            const tasks = tasksForDate(date, { includeCompleted: false });
+      <section class="planner-calendar" aria-label="Calendário mensal">
+        <div class="planner-calendar-head">
+          <div><span>Calendário</span><strong>${esc(monthTitle)}</strong></div>
+          <div>
+            <button data-action="previousPlannerMonth" type="button" aria-label="Mês anterior">‹</button>
+            <button data-action="nextPlannerMonth" type="button" aria-label="Próximo mês">›</button>
+          </div>
+        </div>
+        <div class="planner-weekdays" aria-hidden="true">${['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'].map((day) => `<span>${day}</span>`).join('')}</div>
+        <div class="planner-days">
+          ${cells.map((date) => {
+            if (!date) return '<span class="planner-day-empty"></span>';
+            const taskCount = tasksForDate(date, { includeCompleted: false }).length;
+            return `<button class="planner-day ${date === localISO() ? 'today' : ''} ${taskCount ? 'has-tasks' : ''}" data-action="selectPlannerDate" data-date="${date}" type="button" aria-label="${esc(formatLongDate(date))}, ${taskCount} tarefa${taskCount === 1 ? '' : 's'}"><span>${parseISO(date).getDate()}</span>${taskCount ? '<i></i>' : ''}</button>`;
+          }).join('')}
+        </div>
+        <p>Toque em um dia para abrir somente a agenda dele.</p>
+      </section>
+    `;
+  }
+
+  function renderProjectBrowser() {
+    const selectedProject = taskProjects.find((project) => project.id === state.selectedProject) || taskProjects[0];
+    const groupedProjectEntries = (projectId) => {
+      const groups = new Map();
+      state.tasks.filter((task) => projectForTask(task).id === projectId).forEach((task) => {
+        const key = normalize(task.title) || task.id;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(task);
+      });
+      return [...groups.values()].map((tasks) => {
+        const next = tasks
+          .map((task) => ({ task, date: nextPendingTaskDate(task) }))
+          .filter((entry) => entry.date)
+          .sort((a, b) => a.date.localeCompare(b.date) || minutesFromTime(a.task.time) - minutesFromTime(b.task.time))[0];
+        return next ? { ...next, variants: tasks.length } : null;
+      }).filter(Boolean);
+    };
+    const projectEntries = groupedProjectEntries(selectedProject.id)
+      .sort((a, b) => a.date.localeCompare(b.date) || minutesFromTime(a.task.time) - minutesFromTime(b.task.time) || a.task.title.localeCompare(b.task.title, 'pt-BR'));
+    return `
+      <section class="project-browser">
+        <div class="project-switcher" role="tablist" aria-label="Projetos">
+          ${taskProjects.map((project) => {
+            const projectTasks = state.tasks.filter((task) => projectForTask(task).id === project.id);
+            const logicalCount = new Set(projectTasks.map((task) => normalize(task.title) || task.id)).size;
+            const todayCount = new Set(projectTasks.filter((task) => isTaskOnDate(task, localISO()) && !isTaskDone(task, localISO())).map((task) => normalize(task.title) || task.id)).size;
             return `
-              <section class="upcoming-day">
-                <button class="upcoming-head" data-action="selectUpcomingDate" data-date="${date}" type="button" style="width:100%;border:0;background:transparent;color:inherit;padding:0;cursor:pointer">
-                  <strong>${esc(formatDayLabel(date))}</strong>
-                  <span>${esc(formatLongDate(date))} · ${tasks.length} tarefa${tasks.length === 1 ? '' : 's'}</span>
-                </button>
-                ${tasks.length ? `<div class="task-list">${tasks.map((task) => taskCard(task, date)).join('')}</div>` : '<div style="color:var(--faint);font-size:9px;padding:7px 1px 2px">Sem tarefas.</div>'}
-              </section>
+              <button class="project-card ${project.id === selectedProject.id ? 'active' : ''}" data-action="selectProject" data-id="${project.id}" type="button" role="tab" aria-selected="${project.id === selectedProject.id}">
+                <span class="project-icon">${project.icon}</span>
+                <span class="project-card-copy"><strong>${esc(project.title)}</strong><small>${logicalCount} tarefas${todayCount ? ` · ${todayCount} hoje` : ''}</small></span>
+                <span class="project-arrow">›</span>
+              </button>
             `;
           }).join('')}
+        </div>
+        <div class="project-list-head">
+          <div><span>${esc(selectedProject.shortTitle)}</span><strong>${esc(selectedProject.description)}</strong></div>
+          <small>${projectEntries.length} ativa${projectEntries.length === 1 ? '' : 's'}</small>
+        </div>
+        ${projectEntries.length
+          ? `<div class="task-list project-task-list">${projectEntries.map(({ task, date, variants }) => taskCard(task, date, { showDate: true, scheduleText: variants > 1 ? `${variants} horários semanais` : '' })).join('')}</div>`
+          : '<div class="project-empty"><span>✓</span><strong>Projeto em dia</strong><p>Nenhuma tarefa ativa neste projeto.</p></div>'}
+      </section>
+    `;
+  }
+
+  function renderUpcoming() {
+    return `
+      <div class="view-enter">
+        ${viewHead('Organização', 'Projetos', 'Cada tarefa aparece uma vez. O calendário abre apenas o dia escolhido.', '<button class="primary-button" data-action="addTask" type="button">+ <span>Tarefa</span></button>')}
+        <div class="projects-layout">
+          ${plannerCalendar()}
+          ${renderProjectBrowser()}
         </div>
       </div>
     `;
@@ -1206,7 +1303,10 @@
     const date = presetDate || task?.date || state.selectedDate || localISO();
     const repeat = task?.repeat || normalizeRepeat(task || {});
     const repeatPreset = repeatPresetFor(task);
-    const advancedOpen = Boolean(task?.goalId || task?.notes || repeatPreset === 'custom' || repeat?.mode === 'completed' || repeat?.endDate);
+    const modalProjectId = taskProjectIds.has(task?.projectId)
+      ? task.projectId
+      : state.view === 'upcoming' && taskProjectIds.has(state.selectedProject) ? state.selectedProject : 'routine';
+    const advancedOpen = Boolean(modalProjectId !== 'routine' || task?.goalId || task?.notes || repeatPreset === 'custom' || repeat?.mode === 'completed' || repeat?.endDate);
     openModal(`
       <div class="modal-head">
         <div><h2>${task ? 'Editar tarefa' : 'Nova tarefa'}</h2><p>Tudo é salvo automaticamente quando você confirma.</p></div>
@@ -1232,9 +1332,10 @@
             <div class="field"><label>Avisos</label><select name="reminder" aria-label="Avisos da tarefa"><option value="30" selected>30 min antes + na hora</option></select></div>
           </div>
           <details class="task-advanced" id="taskAdvanced" ${advancedOpen ? 'open' : ''}>
-            <summary><span>Mais opções</span><small>duração, repetição avançada, meta e nota</small></summary>
+            <summary><span>Mais opções</span><small>duração, projeto, repetição avançada, meta e nota</small></summary>
             <div class="task-advanced-content">
               <div class="field"><label>Duração</label><div class="duration-input"><input name="duration" type="number" min="5" step="5" inputmode="numeric" value="${esc(task?.duration || state.settings.defaultDuration)}" /><span>min</span></div></div>
+              <div class="field"><label>Projeto</label><select name="projectId">${taskProjects.map((project) => `<option value="${project.id}" ${modalProjectId === project.id ? 'selected' : ''}>${esc(project.title)}</option>`).join('')}</select></div>
               <div class="repeat-editor" id="repeatAdvanced" ${repeatPreset === 'none' ? 'hidden' : ''}>
                 <div class="repeat-grid">
                   <div class="field"><label>Repetir pela</label><select name="repeatMode">
@@ -2143,6 +2244,24 @@
       todayNow: () => selectCalendarDate(localISO(), state.selectedDate > localISO() ? 'backward' : 'forward'),
       selectDate: () => selectCalendarDate(date, date >= state.selectedDate ? 'forward' : 'backward'),
       selectUpcomingDate: () => selectCalendarDate(date, 'forward'),
+      selectPlannerDate: () => selectCalendarDate(date, date >= state.selectedDate ? 'forward' : 'backward'),
+      previousPlannerMonth: () => {
+        state.plannerMonth = addMonths(state.plannerMonth, -1).slice(0, 7) + '-01';
+        save();
+        render({ quiet: true });
+      },
+      nextPlannerMonth: () => {
+        state.plannerMonth = addMonths(state.plannerMonth, 1).slice(0, 7) + '-01';
+        save();
+        render({ quiet: true });
+      },
+      selectProject: () => {
+        if (!taskProjectIds.has(id)) return;
+        state.selectedProject = id;
+        save();
+        render({ quiet: true });
+        haptic('select');
+      },
       toggleCompletedDrawer: () => {
         const drawer = $('#completedDrawer');
         if (!drawer) return;
@@ -2190,10 +2309,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '18');
+      freshUrl.searchParams.set('build', '19');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=18').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=19').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
@@ -2207,14 +2326,20 @@
     executeCommand,
     isTaskOnDate,
     recurrenceLabel,
+    nextPendingTaskDate,
+    projectForTask,
     syncSystemDay,
     applyCloudState(input) {
       const currentView = state.view;
       const currentDate = state.selectedDate;
+      const currentProject = state.selectedProject;
+      const currentPlannerMonth = state.plannerMonth;
       const notificationSetting = state.settings.notificationsEnabled;
       const incoming = sanitizeState(input);
       incoming.view = currentView;
       incoming.selectedDate = currentDate;
+      incoming.selectedProject = currentProject;
+      incoming.plannerMonth = currentPlannerMonth;
       incoming.lastSystemDate = localISO();
       incoming.settings.notificationsEnabled = notificationSetting;
       state = incoming;
