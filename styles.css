@@ -750,13 +750,13 @@ html[data-motion="off"] *,html[data-motion="off"] *::before,html[data-motion="of
   .task-modal .modal-head h2{font-size:15px}
   .task-modal .modal-head p,.task-modal .form-note{display:none}
   .task-modal .modal-head .modal-close{width:32px;height:32px;border-radius:12px}
-  .task-modal .task-title-field input{min-height:39px;font-size:13px}
+  .task-modal .task-title-field input{height:35px;min-height:35px;max-height:35px;font-size:13px}
   .task-core-grid{grid-template-columns:minmax(0,1fr);gap:7px}
   .task-options-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .task-modal .field{gap:4px}
   .task-modal .field input,.task-modal .field select{min-height:35px;padding:6px 8px;border-radius:11px}
-  .task-modal input[type="date"],.task-modal input[type="time"]{height:39px;min-height:39px;max-height:39px;padding-block:0;line-height:39px;font-size:13px}
-  .task-modal input[type="date"]::-webkit-date-and-time-value,.task-modal input[type="time"]::-webkit-date-and-time-value{height:39px;min-height:0;display:flex;align-items:center;justify-content:center}
+  .task-modal input[type="date"],.task-modal input[type="time"]{height:35px;min-height:35px;max-height:35px;padding-block:0;line-height:35px;font-size:13px}
+  .task-modal input[type="date"]::-webkit-date-and-time-value,.task-modal input[type="time"]::-webkit-date-and-time-value{height:35px;min-height:0;display:flex;align-items:center;justify-content:center}
   .task-modal .modal-actions{position:static;min-width:0;margin-top:8px;padding:0;background:none;flex-wrap:wrap}
   .task-modal .modal-actions .primary-button,.task-modal .modal-actions .soft-button,.task-modal .modal-actions .danger-button{min-height:32px;padding-inline:9px}
   .task-advanced summary small{display:none}
