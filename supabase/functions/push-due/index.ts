@@ -17,6 +17,7 @@ type Task = {
   time?: string
   duration?: number
   reminder?: number | null
+  reminders?: number[]
   repeat?: Repeat | null
   recurrence?: string
   completedAt?: number | null
@@ -24,6 +25,7 @@ type Task = {
 }
 
 const jsonHeaders = { 'content-type': 'application/json; charset=utf-8' }
+const reminderMinutes = [30, 0]
 
 function adminKey() {
   const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -91,14 +93,17 @@ async function deliveryKey(endpoint: string, taskId: string, date: string, remin
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-function dueNow(task: Task, zone: string, now: DateTime) {
-  if (!task.time || task.reminder == null) return null
+function dueNow(task: Task, zone: string, now: DateTime, minutesBefore: number) {
+  if (!task.time) return null
   const localNow = now.setZone(zone)
-  const date = localNow.toISODate()
-  if (!date || !taskOccursOn(task, date)) return null
-  const due = DateTime.fromISO(`${date}T${task.time}`, { zone }).minus({ minutes: Number(task.reminder) || 0 }).toUTC()
-  const seconds = now.diff(due, 'seconds').seconds
-  return seconds >= 0 && seconds < 90 ? date : null
+  for (const offset of [0, 1]) {
+    const date = localNow.plus({ days: offset }).toISODate()
+    if (!date || !taskOccursOn(task, date)) continue
+    const due = DateTime.fromISO(`${date}T${task.time}`, { zone }).minus({ minutes: minutesBefore }).toUTC()
+    const seconds = now.diff(due, 'seconds').seconds
+    if (seconds >= 0 && seconds < 90) return date
+  }
+  return null
 }
 
 export default {
@@ -128,7 +133,9 @@ export default {
     for (const row of states || []) {
       const tasks = Array.isArray(row.payload?.tasks) ? row.payload.tasks as Task[] : []
       const zone = row.timezone || 'UTC'
-      const dueTasks = tasks.map((task) => ({ task, date: dueNow(task, zone, now) })).filter((item) => item.date)
+      const dueTasks = tasks
+        .flatMap((task) => reminderMinutes.map((minutesBefore) => ({ task, minutesBefore, date: dueNow(task, zone, now, minutesBefore) })))
+        .filter((item) => item.date)
       if (!dueTasks.length) continue
 
       const { data: subscriptions } = await supabase
@@ -137,9 +144,9 @@ export default {
         .eq('user_id', row.user_id)
         .eq('active', true)
 
-      for (const { task, date } of dueTasks) {
+      for (const { task, date, minutesBefore } of dueTasks) {
         for (const subscription of subscriptions || []) {
-          const keyValue = await deliveryKey(subscription.endpoint, task.id, date!, Number(task.reminder) || 0)
+          const keyValue = await deliveryKey(subscription.endpoint, task.id, date!, minutesBefore)
           const { data: delivered } = await supabase.from('push_deliveries').select('delivery_key').eq('delivery_key', keyValue).maybeSingle()
           if (delivered) continue
           try {
@@ -148,8 +155,8 @@ export default {
               keys: { p256dh: subscription.p256dh, auth: subscription.auth }
             }, JSON.stringify({
               title: task.title,
-              body: `${task.time} · ${Number(task.duration) || 0} min`,
-              tag: `task-${task.id}-${date}`,
+              body: `${minutesBefore > 0 ? `Em ${minutesBefore} min` : 'Agora'} · ${task.time} · ${Number(task.duration) || 0} min`,
+              tag: `task-${task.id}-${date}-${minutesBefore}`,
               url: `./?date=${date}`
             }))
             await supabase.from('push_deliveries').insert({

@@ -3,6 +3,7 @@
 
   const DIRTY_KEY = 'objetivos-cloud-dirty-v1';
   const CONFIG = window.OBJETIVOS_CLOUD_CONFIG || {};
+  window.OBJETIVOS_PUSH_ACTIVE = null;
   const runtime = {
     client: null,
     session: null,
@@ -12,7 +13,8 @@
     lastHash: '',
     syncing: false,
     initialSyncPromise: null,
-    error: ''
+    error: '',
+    pushActive: null
   };
 
   const api = () => window.__OBJETIVOS__;
@@ -229,13 +231,28 @@
       updated_at: new Date().toISOString()
     }, { onConflict: 'endpoint' });
     if (error) throw error;
+    setPushState(true);
     return true;
+  }
+
+  function setPushState(active) {
+    runtime.pushActive = Boolean(active);
+    window.OBJETIVOS_PUSH_ACTIVE = runtime.pushActive;
+    if (typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('objetivos:push-status', { detail: { active: runtime.pushActive } }));
+    }
+    return runtime.pushActive;
   }
 
   async function pushIsActive() {
     if (!('serviceWorker' in navigator) || !('Notification' in window) || Notification.permission !== 'granted') return false;
     const registration = await navigator.serviceWorker.getRegistration();
     return Boolean(await registration?.pushManager?.getSubscription?.());
+  }
+
+  async function refreshPushState() {
+    try { return setPushState(await pushIsActive()); }
+    catch { return setPushState(false); }
   }
 
   async function refreshSettings() {
@@ -266,8 +283,8 @@
       button.setAttribute('aria-label', 'Continuar com Google');
     }
     if (pushCopy && pushButton) {
-      const active = await pushIsActive();
-      pushCopy.textContent = active ? 'Alertas do servidor ativos neste aparelho.' : 'Ative para receber alertas mesmo com o PWA fechado.';
+      const active = await refreshPushState();
+      pushCopy.textContent = active ? 'Alertas únicos: 30 minutos antes e exatamente no horário.' : 'Ative para receber os dois alertas mesmo com o PWA fechado.';
       pushButton.textContent = active ? 'Ativo' : 'Ativar';
       pushButton.disabled = active;
     }
@@ -295,7 +312,7 @@
       try {
         await enablePush();
         pushButton.textContent = 'Ativo';
-        document.querySelector('#pushStatusCopy').textContent = 'Alertas do servidor ativos neste aparelho.';
+        document.querySelector('#pushStatusCopy').textContent = 'Alertas únicos: 30 minutos antes e exatamente no horário.';
       } catch (error) {
         pushButton.disabled = false;
         document.querySelector('#pushStatusCopy').textContent = error.message || 'Não foi possível ativar o push.';
@@ -314,6 +331,7 @@
       if (document.visibilityState === 'visible' && runtime.session) initialSync();
     });
     if (!configured()) {
+      setPushState(false);
       setRuntimeStatus({ error: '' });
       setAuthGate({ message: 'Servidor de acesso indisponível. Tente novamente em instantes.' });
       return;
@@ -321,6 +339,7 @@
     runtime.client = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.publishableKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
+    await refreshPushState();
     runtime.client.auth.onAuthStateChange((_event, session) => {
       const wasSignedIn = Boolean(runtime.session);
       runtime.session = session;

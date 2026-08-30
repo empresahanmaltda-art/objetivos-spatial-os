@@ -4,7 +4,8 @@
   const STORAGE_KEY = 'objetivos-spatial-os-v2';
   const LEGACY_KEY = 'objetivos-spatial-os-v1';
   const CHANNEL_NAME = 'objetivos-spatial-os-sync';
-  const ROUTINE_VERSION = 1;
+  const ROUTINE_VERSION = 2;
+  const REMINDER_MINUTES = [30, 0];
   const NOTIFICATION_LOG_KEY = 'objetivos-spatial-os-notifications-v1';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -78,6 +79,36 @@
     sexy: { label: 'Sexy', accent: '#ff5d91', background: '#23151e', glass: '#351f2d', module: '#181015', glow: '#6d294f', intensity: 72, glassOpacity: 82, moduleOpacity: 88, glassBlur: 30, themeColor: '#100b0f' }
   };
 
+  function safeHex(value, fallback) {
+    return /^#[\da-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : fallback;
+  }
+
+  function sanitizeSavedTheme(input = {}, index = 0) {
+    const fallback = themePresets.spatial;
+    const fallbackId = `palette-${index + 1}`;
+    const id = String(input.id || fallbackId).replace(/[^a-z0-9-]/gi, '').slice(0, 64) || fallbackId;
+    const label = String(input.label || `Minha paleta ${index + 1}`).trim().slice(0, 28) || `Minha paleta ${index + 1}`;
+    return {
+      id,
+      label,
+      accent: safeHex(input.accent, fallback.accent),
+      background: safeHex(input.background, fallback.background),
+      glass: safeHex(input.glass, fallback.glass),
+      module: safeHex(input.module, fallback.module),
+      glow: safeHex(input.glow, fallback.glow),
+      intensity: clamp(Number(input.intensity) || 0, 0, 100),
+      glassOpacity: clamp(Number(input.glassOpacity) || fallback.glassOpacity, 20, 100),
+      moduleOpacity: clamp(Number(input.moduleOpacity) || fallback.moduleOpacity, 20, 100),
+      glassBlur: clamp(Number(input.glassBlur) || 0, 0, 50),
+      createdAt: Number(input.createdAt) || Date.now()
+    };
+  }
+
+  function savedThemeFor(settings, value = settings?.theme) {
+    const id = String(value || '').startsWith('saved:') ? String(value).slice(6) : '';
+    return id ? settings?.savedThemes?.find((preset) => preset.id === id) || null : null;
+  }
+
   const weekdayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
   function weeklyRepeat(days, mode = 'scheduled') {
@@ -99,7 +130,8 @@
       repeat: { ...repeat, days: [...(repeat.days || [])] },
       goalId: '',
       notes,
-      reminder: 0,
+      reminder: REMINDER_MINUTES[0],
+      reminders: [...REMINDER_MINUTES],
       createdAt: Date.now(),
       completedAt: null,
       completions: {},
@@ -129,11 +161,11 @@
       routineTask('body-main', 'Corpo / treino', '17:15', 90, monWedThu),
       routineTask('body-tue', 'Corpo / treino', '18:15', 90, weeklyRepeat([2])),
       routineTask('body-fri', 'Corpo / treino', '19:30', 90, weeklyRepeat([5])),
-      routineTask('marketing-main', 'Marketing', '19:30', 105, monWedThu),
-      routineTask('marketing-tue', 'Marketing', '20:30', 45, weeklyRepeat([2])),
-      routineTask('marketing-fri', 'Marketing', '08:00', 60, weeklyRepeat([5])),
-      routineTask('marketing-sat', 'Marketing', '17:30', 225, weeklyRepeat([6])),
-      routineTask('marketing-sun', 'Marketing', '19:45', 90, weeklyRepeat([0])),
+      routineTask('marketing-main', 'Marketing', '15:00', 105, monWedThu),
+      routineTask('marketing-tue', 'Marketing', '15:00', 45, weeklyRepeat([2])),
+      routineTask('marketing-fri', 'Marketing', '15:00', 60, weeklyRepeat([5])),
+      routineTask('marketing-sat', 'Marketing', '15:00', 225, weeklyRepeat([6])),
+      routineTask('marketing-sun', 'Marketing', '15:00', 90, weeklyRepeat([0])),
       routineTask('russian', 'Russo PM', '21:45', 75, allDays),
       routineTask('meal-prep', 'Preparar refeições da semana', '17:15', 120, weeklyRepeat([0])),
       routineTask('weekly-score', 'Placar semanal + primeira ação de segunda', '19:30', 15, weeklyRepeat([0])),
@@ -145,7 +177,8 @@
     return {
       hideCompleted: true,
       defaultDuration: 60,
-      defaultReminder: 0,
+      defaultReminder: REMINDER_MINUTES[0],
+      defaultReminders: [...REMINDER_MINUTES],
       theme: 'spatial',
       customAccent: themePresets.spatial.accent,
       customBackground: themePresets.spatial.background,
@@ -157,6 +190,7 @@
       glassOpacity: 82,
       moduleOpacity: 84,
       glassBlur: 28,
+      savedThemes: [],
       haptics: true,
       motion: true,
       notificationsEnabled: false,
@@ -244,17 +278,19 @@
   function sanitizeTask(task = {}) {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(task.date || '') ? task.date : localISO();
     const repeat = normalizeRepeat({ ...task, date });
+    const time = /^\d{2}:\d{2}$/.test(task.time || '') ? task.time : '';
     return {
       id: task.id || uid('task'),
       title: String(task.title || 'Tarefa').trim(),
       date,
-      time: /^\d{2}:\d{2}$/.test(task.time || '') ? task.time : '',
+      time,
       duration: Math.max(5, Number(task.duration) || 60),
       recurrence: repeat ? (repeat.type === 'day' && repeat.interval === 1 ? 'daily' : 'custom') : 'none',
       repeat,
       goalId: task.goalId || '',
       notes: String(task.notes || ''),
-      reminder: task.reminder === '' || task.reminder == null ? null : clamp(Number(task.reminder), 0, 10080),
+      reminder: time ? REMINDER_MINUTES[0] : null,
+      reminders: time ? [...REMINDER_MINUTES] : [],
       createdAt: Number(task.createdAt) || Date.now(),
       completedAt: task.completedAt || null,
       completions: task.completions && typeof task.completions === 'object' ? task.completions : {},
@@ -265,12 +301,24 @@
 
   function ensureRoutine(next) {
     if ((Number(next.settings?.routineVersion) || 0) >= ROUTINE_VERSION) return next;
-    const existingIds = new Set(next.tasks.map((task) => task.id));
-    const signatures = new Set(next.tasks.map((task) => `${normalize(task.title)}|${task.time || ''}`));
-    seedRoutine().forEach((task) => {
-      const signature = `${normalize(task.title)}|${task.time}`;
-      if (!existingIds.has(task.id) && !signatures.has(signature)) next.tasks.push(task);
+    const routineKey = (task) => String(task.id || '').match(/^routine-v\d+-(.+)$/)?.[1] || '';
+    const previousRoutines = new Map(next.tasks.filter((task) => task.routine).map((task) => [routineKey(task), task]));
+    const customTasks = next.tasks.filter((task) => !task.routine);
+    const migratedRoutine = seedRoutine().map((template) => {
+      const previous = previousRoutines.get(routineKey(template));
+      if (!previous) return template;
+      return {
+        ...template,
+        date: previous.date || template.date,
+        goalId: previous.goalId || template.goalId,
+        notes: previous.notes || template.notes,
+        createdAt: previous.createdAt || template.createdAt,
+        completedAt: previous.completedAt || null,
+        completions: previous.completions || {},
+        completionHistory: previous.completionHistory || {}
+      };
     });
+    next.tasks = [...migratedRoutine, ...customTasks];
     next.settings.routineVersion = ROUTINE_VERSION;
     return next;
   }
@@ -322,6 +370,10 @@
     const previousVersion = Number(input.version) || 0;
     const settings = { ...defaultSettings(), ...(input.settings || {}) };
     if (!input.settings?.customGlow && input.settings?.customAmbient) settings.customGlow = input.settings.customAmbient;
+    settings.savedThemes = Array.isArray(settings.savedThemes)
+      ? settings.savedThemes.slice(0, 12).map(sanitizeSavedTheme)
+      : [];
+    if (String(settings.theme || '').startsWith('saved:') && !savedThemeFor(settings)) settings.theme = 'custom';
     const storedSystemDate = /^\d{4}-\d{2}-\d{2}$/.test(input.lastSystemDate || '') ? input.lastSystemDate : '';
     const seededGoalIds = new Set(seedGoals().map((goal) => goal.id));
     const goals = Array.isArray(input.goals) && input.goals.length
@@ -373,6 +425,8 @@
   let suppressTaskClick = false;
   let modalScrollY = 0;
   let viewportTouch = null;
+  let modalIndicatorTimer = null;
+  let modalIndicatorCleanup = null;
 
   function hexToRgb(value, fallback = '127 169 230') {
     const match = String(value || '').trim().match(/^#([\da-f]{6})$/i);
@@ -389,7 +443,8 @@
   }
 
   function applyAppearance() {
-    const preset = themePresets[state.settings.theme] || themePresets.spatial;
+    const savedPreset = savedThemeFor(state.settings);
+    const preset = savedPreset || themePresets[state.settings.theme] || themePresets.spatial;
     const custom = state.settings.theme === 'custom';
     const accent = custom ? state.settings.customAccent : preset.accent;
     const background = custom ? state.settings.customBackground : preset.background;
@@ -404,7 +459,7 @@
     const glassAlpha = glassOpacity / 100;
     const moduleAlpha = moduleOpacity / 100;
     const root = document.documentElement;
-    root.dataset.theme = custom ? 'custom' : state.settings.theme;
+    root.dataset.theme = custom ? 'custom' : savedPreset ? 'saved' : themePresets[state.settings.theme] ? state.settings.theme : 'spatial';
     root.dataset.motion = state.settings.motion === false ? 'off' : 'on';
     root.style.setProperty('--accent-rgb', hexToRgb(accent));
     root.style.setProperty('--ambient-rgb', hexToRgb(glow, '149 139 127'));
@@ -423,7 +478,7 @@
     root.style.setProperty('--glass-blur', `${glassBlur}px`);
     root.style.setProperty('--shadow', `0 30px 80px rgba(4,6,8,.4),0 0 ${Math.round(12 + intensity * .34)}px rgb(${hexToRgb(glow, '149 139 127')} / ${(.025 + intensity * .0012).toFixed(3)}),inset 0 1px 0 rgba(255,255,255,.06)`);
     const themeMeta = $('meta[name="theme-color"]');
-    const backgroundThemeColor = custom ? `rgb(${blendRgb(background, '#060708', .56)})` : preset.themeColor;
+    const backgroundThemeColor = custom || savedPreset ? `rgb(${blendRgb(background, '#060708', .56)})` : preset.themeColor;
     if (themeMeta) themeMeta.setAttribute('content', document.body?.classList.contains('modal-open') ? '#111315' : backgroundThemeColor);
   }
 
@@ -692,17 +747,19 @@
       repeat: data.repeat,
       recurrence: data.recurrence || 'none'
     });
+    const time = /^\d{2}:\d{2}$/.test(data.time || '') ? data.time : '';
     const task = {
       id: existing?.id || uid('task'),
       title: String(data.title || '').trim(),
       date,
-      time: data.time || '',
+      time,
       duration: Math.max(5, Number(data.duration) || Number(state.settings.defaultDuration) || 60),
       recurrence: repeat ? (repeat.type === 'day' && repeat.interval === 1 ? 'daily' : 'custom') : 'none',
       repeat,
       goalId: data.goalId || '',
       notes: String(data.notes || '').trim(),
-      reminder: data.reminder === '' || data.reminder == null ? null : clamp(Number(data.reminder), 0, 10080),
+      reminder: time ? REMINDER_MINUTES[0] : null,
+      reminders: time ? [...REMINDER_MINUTES] : [],
       createdAt: existing?.createdAt || Date.now(),
       completedAt: existing?.completedAt || null,
       completions: existing?.completions || {},
@@ -998,6 +1055,55 @@
     updateAppBadge();
   }
 
+  function setupModalScrollIndicator(modal, indicator) {
+    modalIndicatorCleanup?.();
+    modalIndicatorCleanup = null;
+    if (!modal || !indicator) return;
+    let frame = 0;
+    const paint = (show = false) => {
+      frame = 0;
+      const maxScroll = Math.max(0, modal.scrollHeight - modal.clientHeight);
+      if (maxScroll <= 2) {
+        indicator.hidden = true;
+        indicator.classList.remove('active');
+        return;
+      }
+      indicator.hidden = false;
+      const rect = modal.getBoundingClientRect();
+      const inset = 11;
+      const thumbHeight = Math.min(34, Math.max(26, rect.height - inset * 2));
+      const travel = Math.max(0, rect.height - inset * 2 - thumbHeight);
+      const progress = clamp(modal.scrollTop / maxScroll, 0, 1);
+      indicator.style.height = `${Math.round(thumbHeight)}px`;
+      indicator.style.left = `${Math.round(rect.right - 6)}px`;
+      indicator.style.top = `${Math.round(rect.top + inset + travel * progress)}px`;
+      if (!show) return;
+      indicator.classList.add('active');
+      if (modalIndicatorTimer) clearTimeout(modalIndicatorTimer);
+      modalIndicatorTimer = setTimeout(() => indicator.classList.remove('active'), 620);
+    };
+    const schedule = (show = false) => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => paint(show));
+    };
+    const onScroll = () => schedule(true);
+    const onResize = () => schedule(false);
+    const onToggle = () => schedule(true);
+    modal.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+    window.visualViewport?.addEventListener('resize', onResize, { passive: true });
+    $$('details', modal).forEach((details) => details.addEventListener('toggle', onToggle));
+    modalIndicatorCleanup = () => {
+      modal.removeEventListener?.('scroll', onScroll);
+      window.removeEventListener?.('resize', onResize);
+      window.visualViewport?.removeEventListener?.('resize', onResize);
+      $$('details', modal).forEach((details) => details.removeEventListener?.('toggle', onToggle));
+      if (modalIndicatorTimer) clearTimeout(modalIndicatorTimer);
+      modalIndicatorTimer = null;
+    };
+    schedule(false);
+  }
+
   function openModal(content, className = '') {
     const layer = $('#modalLayer');
     if (!document.body?.classList.contains('modal-open')) {
@@ -1006,9 +1112,10 @@
       document.body?.classList.add('modal-open');
     }
     layer.classList.add('open');
-    layer.innerHTML = `<section class="modal glass ${className}" role="dialog" aria-modal="true">${content}</section>`;
+    layer.innerHTML = `<section class="modal glass ${className}" role="dialog" aria-modal="true">${content}</section><i class="modal-scroll-indicator" aria-hidden="true" hidden></i>`;
     applyAppearance();
     requestAnimationFrame(() => {
+      setupModalScrollIndicator($('.modal', layer), $('.modal-scroll-indicator', layer));
       const firstField = $('input:not([type="hidden"]),textarea,select', layer);
       const mobileClose = window.matchMedia?.('(max-width:760px)')?.matches ? $('.modal-head .modal-close', layer) : null;
       (mobileClose || firstField || $('button', layer))?.focus({ preventScroll: true });
@@ -1017,6 +1124,8 @@
 
   function closeModal() {
     const layer = $('#modalLayer');
+    modalIndicatorCleanup?.();
+    modalIndicatorCleanup = null;
     layer.classList.remove('open');
     layer.innerHTML = '';
     const wasLocked = document.body?.classList.contains('modal-open');
@@ -1097,7 +1206,6 @@
     const date = presetDate || task?.date || state.selectedDate || localISO();
     const repeat = task?.repeat || normalizeRepeat(task || {});
     const repeatPreset = repeatPresetFor(task);
-    const reminder = task?.reminder ?? state.settings.defaultReminder;
     const advancedOpen = Boolean(task?.goalId || task?.notes || repeatPreset === 'custom' || repeat?.mode === 'completed' || repeat?.endDate);
     openModal(`
       <div class="modal-head">
@@ -1121,15 +1229,7 @@
             <option value="yearly" ${repeatPreset === 'yearly' ? 'selected' : ''}>Todo ano</option>
             <option value="custom" ${repeatPreset === 'custom' ? 'selected' : ''}>Personalizada…</option>
             </select></div>
-            <div class="field"><label>Lembrete</label><select name="reminder">
-            <option value="" ${reminder == null ? 'selected' : ''}>Sem lembrete</option>
-            <option value="0" ${Number(reminder) === 0 ? 'selected' : ''}>No horário</option>
-            <option value="5" ${Number(reminder) === 5 ? 'selected' : ''}>5 min antes</option>
-            <option value="10" ${Number(reminder) === 10 ? 'selected' : ''}>10 min antes</option>
-            <option value="15" ${Number(reminder) === 15 ? 'selected' : ''}>15 min antes</option>
-            <option value="30" ${Number(reminder) === 30 ? 'selected' : ''}>30 min antes</option>
-            <option value="60" ${Number(reminder) === 60 ? 'selected' : ''}>1 hora antes</option>
-            </select></div>
+            <div class="field"><label>Avisos</label><select name="reminder" aria-label="Avisos da tarefa"><option value="30" selected>30 min antes + na hora</option></select></div>
           </div>
           <details class="task-advanced" id="taskAdvanced" ${advancedOpen ? 'open' : ''}>
             <summary><span>Mais opções</span><small>duração, repetição avançada, meta e nota</small></summary>
@@ -1499,7 +1599,8 @@
   }
 
   function settingsModal() {
-    const activeTheme = state.settings.theme === 'custom' || themePresets[state.settings.theme] ? state.settings.theme : 'spatial';
+    const activeSavedTheme = savedThemeFor(state.settings);
+    const activeTheme = state.settings.theme === 'custom' || themePresets[state.settings.theme] || activeSavedTheme ? state.settings.theme : 'spatial';
     const activePalette = activeTheme === 'custom' ? {
       accent: state.settings.customAccent,
       background: state.settings.customBackground,
@@ -1510,7 +1611,7 @@
       glassOpacity: state.settings.glassOpacity,
       moduleOpacity: state.settings.moduleOpacity,
       glassBlur: state.settings.glassBlur
-    } : themePresets[activeTheme];
+    } : activeSavedTheme || themePresets[activeTheme];
     const notificationPermission = 'Notification' in globalThis ? Notification.permission : 'unsupported';
     const routineCount = state.tasks.filter((task) => task.routine).length;
     openModal(`
@@ -1526,6 +1627,14 @@
               <i></i><span>${preset.label}</span>
             </button>
           `).join('')}
+          ${state.settings.savedThemes.map((preset) => `
+            <div class="saved-theme-card">
+              <button class="theme-preset ${activeTheme === `saved:${preset.id}` ? 'active' : ''}" data-saved-theme-choice="${esc(preset.id)}" type="button" style="--swatch:${preset.accent};--swatch-bg:${preset.background}">
+                <i></i><span>${esc(preset.label)}</span>
+              </button>
+              <button class="saved-theme-delete" data-delete-saved-theme="${esc(preset.id)}" type="button" aria-label="Apagar ${esc(preset.label)}">×</button>
+            </div>
+          `).join('')}
         </div>
         <div class="color-controls">
           <label><span>Destaque</span><input id="accentColor" type="color" value="${esc(activePalette.accent)}" /></label>
@@ -1540,6 +1649,10 @@
           <label><span>Transparência cards <output id="moduleOpacityValue">${esc(activePalette.moduleOpacity)}%</output></span><input id="moduleOpacity" type="range" min="20" max="100" value="${esc(activePalette.moduleOpacity)}" /></label>
           <label><span>Blur glass <output id="glassBlurValue">${esc(activePalette.glassBlur)}px</output></span><input id="glassBlur" type="range" min="0" max="50" value="${esc(activePalette.glassBlur)}" /></label>
         </div>
+        <div class="preset-save-row">
+          <label for="themePresetName"><span>Salvar sua combinação</span><small>Cores, glow, transparência e blur.</small></label>
+          <div><input id="themePresetName" type="text" maxlength="28" placeholder="Nome da predefinição" autocomplete="off" /><button class="soft-button" id="saveThemePresetBtn" type="button">Salvar predefinição</button></div>
+        </div>
       </section>
       <div class="settings-list">
         <div class="setting-row">
@@ -1547,11 +1660,11 @@
           <button class="soft-button" id="restoreRoutineBtn" type="button">Restaurar</button>
         </div>
         <div class="setting-row">
-          <div class="setting-copy"><strong>Lembretes neste aparelho</strong><span>${notificationPermission === 'granted' ? 'Permissão concedida. Alertas funcionam enquanto o sistema mantém o app ativo.' : 'Ative a permissão para receber alertas das tarefas com horário.'}</span></div>
+          <div class="setting-copy"><strong>Lembretes neste aparelho</strong><span>${notificationPermission === 'granted' ? 'Fallback local ativo: 30 minutos antes e exatamente no horário, sem duplicar o push.' : 'Ative a permissão para receber os dois alertas de cada tarefa com horário.'}</span></div>
           <label class="native-switch"><input id="notificationToggle" type="checkbox" switch ${state.settings.notificationsEnabled ? 'checked' : ''}/><span></span></label>
         </div>
         <div class="setting-row" id="pushSettingRow">
-          <div class="setting-copy"><strong>Notificar com o app fechado</strong><span id="pushStatusCopy">Conecte sua conta para ativar os alertas Web Push.</span></div>
+          <div class="setting-copy"><strong>Notificar com o app fechado</strong><span id="pushStatusCopy">Conecte sua conta para receber um alerta 30 minutos antes e outro no horário.</span></div>
           <button class="soft-button" id="pushServerBtn" type="button">Ativar</button>
         </div>
         <div class="setting-row">
@@ -1595,7 +1708,8 @@
       </div>
     `);
     const refreshThemeButtons = () => {
-      $$('.theme-preset').forEach((button) => button.classList.toggle('active', button.dataset.themeChoice === state.settings.theme));
+      $$('[data-theme-choice]').forEach((button) => button.classList.toggle('active', button.dataset.themeChoice === state.settings.theme));
+      $$('[data-saved-theme-choice]').forEach((button) => button.classList.toggle('active', `saved:${button.dataset.savedThemeChoice}` === state.settings.theme));
     };
     const refreshAppearanceOutputs = () => {
       $('#glowIntensityValue').textContent = `${$('#colorIntensity').value}%`;
@@ -1615,20 +1729,47 @@
       $('#glassBlur').value = palette.glassBlur;
       refreshAppearanceOutputs();
     };
-    $$('.theme-preset').forEach((button) => {
+    const syncPaletteToSettings = (palette) => {
+      state.settings.customAccent = palette.accent;
+      state.settings.customBackground = palette.background;
+      state.settings.customGlass = palette.glass;
+      state.settings.customModule = palette.module;
+      state.settings.customGlow = palette.glow;
+      state.settings.customAmbient = palette.glow;
+      state.settings.colorIntensity = Number(palette.intensity);
+      state.settings.glassOpacity = Number(palette.glassOpacity);
+      state.settings.moduleOpacity = Number(palette.moduleOpacity);
+      state.settings.glassBlur = Number(palette.glassBlur);
+    };
+    const paletteFromInputs = () => ({
+      accent: $('#accentColor').value,
+      background: $('#backgroundColor').value,
+      glass: $('#glassColor').value,
+      module: $('#moduleColor').value,
+      glow: $('#glowColor').value,
+      intensity: Number($('#colorIntensity').value),
+      glassOpacity: Number($('#glassOpacity').value),
+      moduleOpacity: Number($('#moduleOpacity').value),
+      glassBlur: Number($('#glassBlur').value)
+    });
+    $$('[data-theme-choice]').forEach((button) => {
       button.onclick = () => {
         state.settings.theme = button.dataset.themeChoice;
         const preset = themePresets[state.settings.theme];
-        state.settings.customAccent = preset.accent;
-        state.settings.customBackground = preset.background;
-        state.settings.customGlass = preset.glass;
-        state.settings.customModule = preset.module;
-        state.settings.customGlow = preset.glow;
-        state.settings.customAmbient = preset.glow;
-        state.settings.colorIntensity = preset.intensity;
-        state.settings.glassOpacity = preset.glassOpacity;
-        state.settings.moduleOpacity = preset.moduleOpacity;
-        state.settings.glassBlur = preset.glassBlur;
+        syncPaletteToSettings(preset);
+        syncAppearanceInputs(preset);
+        applyAppearance();
+        save();
+        refreshThemeButtons();
+        haptic('select');
+      };
+    });
+    $$('[data-saved-theme-choice]').forEach((button) => {
+      button.onclick = () => {
+        const preset = state.settings.savedThemes.find((item) => item.id === button.dataset.savedThemeChoice);
+        if (!preset) return;
+        state.settings.theme = `saved:${preset.id}`;
+        syncPaletteToSettings(preset);
         syncAppearanceInputs(preset);
         applyAppearance();
         save();
@@ -1638,16 +1779,7 @@
     });
     const applyCustomAppearance = () => {
       state.settings.theme = 'custom';
-      state.settings.customAccent = $('#accentColor').value;
-      state.settings.customBackground = $('#backgroundColor').value;
-      state.settings.customGlass = $('#glassColor').value;
-      state.settings.customModule = $('#moduleColor').value;
-      state.settings.customGlow = $('#glowColor').value;
-      state.settings.customAmbient = state.settings.customGlow;
-      state.settings.colorIntensity = Number($('#colorIntensity').value);
-      state.settings.glassOpacity = Number($('#glassOpacity').value);
-      state.settings.moduleOpacity = Number($('#moduleOpacity').value);
-      state.settings.glassBlur = Number($('#glassBlur').value);
+      syncPaletteToSettings(paletteFromInputs());
       refreshAppearanceOutputs();
       applyAppearance();
       save();
@@ -1655,6 +1787,30 @@
     };
     ['accentColor', 'backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'colorIntensity', 'glassOpacity', 'moduleOpacity', 'glassBlur']
       .forEach((id) => { $(`#${id}`).oninput = applyCustomAppearance; });
+    $('#saveThemePresetBtn').onclick = () => {
+      const label = $('#themePresetName').value.trim() || `Minha paleta ${state.settings.savedThemes.length + 1}`;
+      const preset = sanitizeSavedTheme({ id: uid('palette'), label, ...paletteFromInputs(), createdAt: Date.now() }, state.settings.savedThemes.length);
+      state.settings.savedThemes = [...state.settings.savedThemes, preset].slice(-12);
+      state.settings.theme = `saved:${preset.id}`;
+      syncPaletteToSettings(preset);
+      applyAppearance();
+      save();
+      haptic('success');
+      settingsModal();
+      toast(`Predefinição “${preset.label}” salva.`);
+    };
+    $$('[data-delete-saved-theme]').forEach((button) => {
+      button.onclick = () => {
+        const preset = state.settings.savedThemes.find((item) => item.id === button.dataset.deleteSavedTheme);
+        if (!preset || !confirm(`Apagar a predefinição “${preset.label}”?`)) return;
+        state.settings.savedThemes = state.settings.savedThemes.filter((item) => item.id !== preset.id);
+        if (state.settings.theme === `saved:${preset.id}`) state.settings.theme = 'custom';
+        applyAppearance();
+        save();
+        settingsModal();
+        toast('Predefinição apagada.');
+      };
+    });
     $('#motionToggle').onchange = (event) => { state.settings.motion = event.target.checked; applyAppearance(); save(); };
     $('#hapticToggle').onchange = (event) => { state.settings.haptics = event.target.checked; save(); haptic('select'); };
     $('#swipeLeft').onchange = (event) => { state.settings.swipeLeft = event.target.value; save(); };
@@ -1774,19 +1930,25 @@
     localStorage.setItem(NOTIFICATION_LOG_KEY, JSON.stringify(Object.fromEntries(entries)));
   }
 
-  async function showTaskNotification(task, date) {
+  async function showTaskNotification(task, date, minutesBefore) {
     const recurrence = recurrenceLabel(task);
+    const timing = minutesBefore > 0 ? `Em ${minutesBefore} min` : 'Agora';
+    const tag = `task-${task.id}-${date}-${minutesBefore}`;
     const options = {
-      body: `${task.time} · ${formatDuration(task.duration)}${recurrence ? ` · ${recurrence}` : ''}`,
-      icon: './assets/icon.svg',
-      badge: './assets/icon.svg',
-      tag: `task-${task.id}-${date}`,
+      body: `${timing} · ${task.time} · ${formatDuration(task.duration)}${recurrence ? ` · ${recurrence}` : ''}`,
+      icon: './assets/os-icon-v18-192.png',
+      badge: './assets/os-icon-v18-192.png',
+      tag,
       renotify: false,
-      data: { taskId: task.id, date, url: `./?date=${date}` }
+      data: { taskId: task.id, date, minutesBefore, url: `./?date=${date}` }
     };
     try {
       const registration = await navigator.serviceWorker?.ready;
-      if (registration?.showNotification) await registration.showNotification(task.title, options);
+      if (registration?.showNotification) {
+        const duplicates = await registration.getNotifications?.({ tag }) || [];
+        duplicates.forEach((notification) => notification.close());
+        await registration.showNotification(task.title, options);
+      }
       else if ('Notification' in globalThis) new Notification(task.title, options);
     } catch {
       // Permission or platform support can change outside the app.
@@ -1795,21 +1957,24 @@
 
   function checkDueNotifications() {
     if (!state.settings.notificationsEnabled || !('Notification' in globalThis) || Notification.permission !== 'granted') return;
+    if (globalThis.OBJETIVOS_PUSH_ACTIVE !== false) return;
     const now = new Date();
     const log = readNotificationLog();
     [localISO(now), addDays(localISO(now), 1)].forEach((date) => {
       tasksForDate(date, { includeCompleted: false }).forEach((task) => {
-        if (!task.time || task.reminder == null) return;
+        if (!task.time) return;
         const due = parseISO(date);
         const [hour, minute] = task.time.split(':').map(Number);
         due.setHours(hour, minute, 0, 0);
-        const trigger = due.getTime() - Number(task.reminder) * 60000;
-        const distance = now.getTime() - trigger;
-        const key = `${task.id}|${date}|${task.time}|${task.reminder}`;
-        if (distance >= 0 && distance <= 10 * 60000 && !log[key]) {
-          log[key] = Date.now();
-          showTaskNotification(task, date);
-        }
+        REMINDER_MINUTES.forEach((minutesBefore) => {
+          const trigger = due.getTime() - minutesBefore * 60000;
+          const distance = now.getTime() - trigger;
+          const key = `${task.id}|${date}|${task.time}|${minutesBefore}`;
+          if (distance >= 0 && distance < 90 * 1000 && !log[key]) {
+            log[key] = Date.now();
+            showTaskNotification(task, date, minutesBefore);
+          }
+        });
       });
     });
     writeNotificationLog(log);
@@ -2025,10 +2190,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '17');
+      freshUrl.searchParams.set('build', '18');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=17').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=18').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {

@@ -1,5 +1,5 @@
-const CACHE = 'objetivos-spatial-v17';
-const ASSETS = ['./', './index.html', './styles.css?v=17', './app.js?v=17', './cloud-config.js?v=17', './cloud-sync.js?v=17', './manifest.webmanifest?v=17', './assets/icon.svg?v=17', './assets/apple-touch-icon.png?v=17', './assets/icon-192.png', './assets/icon-512.png'];
+const CACHE = 'objetivos-spatial-v18';
+const ASSETS = ['./', './index.html', './styles.css?v=18', './app.js?v=18', './cloud-config.js?v=18', './cloud-sync.js?v=18', './manifest.webmanifest?v=18', './assets/os-icon-v18-180.png', './assets/os-icon-v18-192.png', './assets/os-icon-v18-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -48,13 +48,19 @@ self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data?.json?.() || {}; } catch { data = { title: 'OBJETIVOS', body: event.data?.text?.() || 'Você tem uma tarefa agora.' }; }
   const title = data.title || 'OBJETIVOS';
-  event.waitUntil(self.registration.showNotification(title, {
-    body: data.body || 'Uma tarefa da sua rotina está começando.',
-    icon: './assets/icon-192.png',
-    badge: './assets/icon-192.png',
-    tag: data.tag || `objetivos-${Date.now()}`,
-    data: { url: data.url || './', ...(data.data || {}) }
-  }));
+  const tag = data.tag || `objetivos-${Date.now()}`;
+  event.waitUntil((async () => {
+    const duplicates = await self.registration.getNotifications({ tag });
+    duplicates.forEach((notification) => notification.close());
+    await self.registration.showNotification(title, {
+      body: data.body || 'Uma tarefa da sua rotina está começando.',
+      icon: './assets/os-icon-v18-192.png',
+      badge: './assets/os-icon-v18-192.png',
+      tag,
+      renotify: false,
+      data: { url: data.url || './', ...(data.data || {}) }
+    });
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
