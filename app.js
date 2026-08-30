@@ -67,10 +67,10 @@
   }
 
   const themePresets = {
-    spatial: { label: 'Spatial', accent: '#79aef0', ambient: '#958b7f', themeColor: '#554e46' },
-    warm: { label: 'Quente', accent: '#ff9b61', ambient: '#9b7259', themeColor: '#4a4138' },
-    cold: { label: 'Frio', accent: '#72d7f2', ambient: '#456a86', themeColor: '#243846' },
-    sexy: { label: 'Sexy', accent: '#ff5d91', ambient: '#6d294f', themeColor: '#3b2433' }
+    spatial: { label: 'Spatial', accent: '#79aef0', background: '#302c28', glass: '#48423b', module: '#1e1c19', glow: '#958b7f', intensity: 62, glassOpacity: 82, moduleOpacity: 84, glassBlur: 28, themeColor: '#554e46' },
+    warm: { label: 'Quente', accent: '#ff9b61', background: '#27231f', glass: '#413a34', module: '#1f1c1a', glow: '#9b7259', intensity: 68, glassOpacity: 80, moduleOpacity: 86, glassBlur: 27, themeColor: '#4a4138' },
+    cold: { label: 'Frio', accent: '#72d7f2', background: '#17232c', glass: '#212f39', module: '#0f171d', glow: '#456a86', intensity: 65, glassOpacity: 80, moduleOpacity: 86, glassBlur: 30, themeColor: '#243846' },
+    sexy: { label: 'Sexy', accent: '#ff5d91', background: '#23151e', glass: '#351f2d', module: '#181015', glow: '#6d294f', intensity: 72, glassOpacity: 82, moduleOpacity: 88, glassBlur: 30, themeColor: '#3b2433' }
   };
 
   const weekdayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
@@ -143,8 +143,15 @@
       defaultReminder: 0,
       theme: 'spatial',
       customAccent: themePresets.spatial.accent,
-      customAmbient: themePresets.spatial.ambient,
+      customBackground: themePresets.spatial.background,
+      customGlass: themePresets.spatial.glass,
+      customModule: themePresets.spatial.module,
+      customGlow: themePresets.spatial.glow,
+      customAmbient: themePresets.spatial.glow,
       colorIntensity: 62,
+      glassOpacity: 82,
+      moduleOpacity: 84,
+      glassBlur: 28,
       haptics: true,
       motion: true,
       notificationsEnabled: false,
@@ -309,6 +316,7 @@
     if (!input || typeof input !== 'object') return base;
     const previousVersion = Number(input.version) || 0;
     const settings = { ...defaultSettings(), ...(input.settings || {}) };
+    if (!input.settings?.customGlow && input.settings?.customAmbient) settings.customGlow = input.settings.customAmbient;
     const storedSystemDate = /^\d{4}-\d{2}-\d{2}$/.test(input.lastSystemDate || '') ? input.lastSystemDate : '';
     const seededGoalIds = new Set(seedGoals().map((goal) => goal.id));
     const goals = Array.isArray(input.goals) && input.goals.length
@@ -368,21 +376,49 @@
     return `${parseInt(hex.slice(0, 2), 16)} ${parseInt(hex.slice(2, 4), 16)} ${parseInt(hex.slice(4, 6), 16)}`;
   }
 
+  function blendRgb(value, target, amount, fallback = '48 44 40') {
+    const source = hexToRgb(value, fallback).split(' ').map(Number);
+    const destination = hexToRgb(target, fallback).split(' ').map(Number);
+    const ratio = clamp(Number(amount) || 0, 0, 1);
+    return source.map((channel, index) => Math.round(channel + (destination[index] - channel) * ratio)).join(' ');
+  }
+
   function applyAppearance() {
     const preset = themePresets[state.settings.theme] || themePresets.spatial;
     const custom = state.settings.theme === 'custom';
     const accent = custom ? state.settings.customAccent : preset.accent;
-    const ambient = custom ? state.settings.customAmbient : preset.ambient;
+    const background = custom ? state.settings.customBackground : preset.background;
+    const glass = custom ? state.settings.customGlass : preset.glass;
+    const module = custom ? state.settings.customModule : preset.module;
+    const glow = custom ? (state.settings.customGlow || state.settings.customAmbient) : preset.glow;
+    const rawIntensity = Number(custom ? state.settings.colorIntensity : preset.intensity);
+    const intensity = Number.isFinite(rawIntensity) ? clamp(rawIntensity, 0, 100) : 62;
+    const glassOpacity = clamp(Number(custom ? state.settings.glassOpacity : preset.glassOpacity) || 82, 20, 100);
+    const moduleOpacity = clamp(Number(custom ? state.settings.moduleOpacity : preset.moduleOpacity) || 84, 20, 100);
+    const glassBlur = clamp(Number(custom ? state.settings.glassBlur : preset.glassBlur) || 28, 0, 50);
+    const glassAlpha = glassOpacity / 100;
+    const moduleAlpha = moduleOpacity / 100;
     const root = document.documentElement;
-    root.dataset.theme = custom ? 'spatial' : state.settings.theme;
+    root.dataset.theme = custom ? 'custom' : state.settings.theme;
     root.dataset.motion = state.settings.motion === false ? 'off' : 'on';
     root.style.setProperty('--accent-rgb', hexToRgb(accent));
-    root.style.setProperty('--ambient-rgb', hexToRgb(ambient, '133 135 139'));
-    const rawIntensity = Number(state.settings.colorIntensity);
-    const intensity = Number.isFinite(rawIntensity) ? clamp(rawIntensity, 0, 100) : 62;
+    root.style.setProperty('--ambient-rgb', hexToRgb(glow, '149 139 127'));
     root.style.setProperty('--ambient-alpha', String(.04 + intensity / 100 * .3));
+    root.style.setProperty('--bg-a', `rgb(${blendRgb(background, '#ffffff', .18)})`);
+    root.style.setProperty('--bg-b', `rgb(${hexToRgb(background, '48 44 40')})`);
+    root.style.setProperty('--bg-c', `rgb(${blendRgb(background, '#060708', .56)})`);
+    root.style.setProperty('--glass-a', `rgb(${hexToRgb(glass, '72 66 59')} / ${glassAlpha})`);
+    root.style.setProperty('--glass-b', `rgb(${blendRgb(glass, '#111315', .44, '72 66 59')} / ${Math.min(1, glassAlpha + .04)})`);
+    root.style.setProperty('--module-a', `rgb(${hexToRgb(module, '30 28 25')} / ${moduleAlpha})`);
+    root.style.setProperty('--module-b', `rgb(${blendRgb(module, '#090a0b', .38, '30 28 25')} / ${Math.min(1, moduleAlpha + .04)})`);
+    root.style.setProperty('--shell', `rgb(${hexToRgb(glass, '72 66 59')} / ${Math.min(1, glassAlpha + .02)})`);
+    root.style.setProperty('--surface', `rgb(${hexToRgb(module, '30 28 25')} / ${Math.min(1, moduleAlpha + .02)})`);
+    root.style.setProperty('--line', `color-mix(in srgb,rgb(${hexToRgb(glow, '149 139 127')} / .17) 68%,rgba(245,248,255,.11))`);
+    root.style.setProperty('--line-soft', `color-mix(in srgb,rgb(${hexToRgb(glow, '149 139 127')} / .1) 65%,rgba(245,248,255,.06))`);
+    root.style.setProperty('--glass-blur', `${glassBlur}px`);
+    root.style.setProperty('--shadow', `0 30px 80px rgba(4,6,8,.4),0 0 ${Math.round(12 + intensity * .34)}px rgb(${hexToRgb(glow, '149 139 127')} / ${(.025 + intensity * .0012).toFixed(3)}),inset 0 1px 0 rgba(255,255,255,.06)`);
     const themeMeta = $('meta[name="theme-color"]');
-    if (themeMeta) themeMeta.setAttribute('content', custom ? '#202225' : preset.themeColor);
+    if (themeMeta) themeMeta.setAttribute('content', custom ? background : preset.themeColor);
   }
 
   function haptic(kind = 'tap') {
@@ -1440,7 +1476,18 @@
   }
 
   function settingsModal() {
-    const activeTheme = state.settings.theme || 'spatial';
+    const activeTheme = state.settings.theme === 'custom' || themePresets[state.settings.theme] ? state.settings.theme : 'spatial';
+    const activePalette = activeTheme === 'custom' ? {
+      accent: state.settings.customAccent,
+      background: state.settings.customBackground,
+      glass: state.settings.customGlass,
+      module: state.settings.customModule,
+      glow: state.settings.customGlow || state.settings.customAmbient,
+      intensity: state.settings.colorIntensity,
+      glassOpacity: state.settings.glassOpacity,
+      moduleOpacity: state.settings.moduleOpacity,
+      glassBlur: state.settings.glassBlur
+    } : themePresets[activeTheme];
     const notificationPermission = 'Notification' in globalThis ? Notification.permission : 'unsupported';
     const routineCount = state.tasks.filter((task) => task.routine).length;
     openModal(`
@@ -1449,18 +1496,26 @@
         <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
       </div>
       <section class="appearance-panel">
-        <div class="settings-section-head"><strong>Designer de cores</strong><span>O visual não muda; só a atmosfera.</span></div>
+        <div class="settings-section-head"><strong>Estúdio de aparência</strong><span>Cada camada do Spatial OS é ajustável.</span></div>
         <div class="theme-presets">
           ${Object.entries(themePresets).map(([id, preset]) => `
-            <button class="theme-preset ${activeTheme === id ? 'active' : ''}" data-theme-choice="${id}" type="button" style="--swatch:${preset.accent}">
+            <button class="theme-preset ${activeTheme === id ? 'active' : ''}" data-theme-choice="${id}" type="button" style="--swatch:${preset.accent};--swatch-bg:${preset.background}">
               <i></i><span>${preset.label}</span>
             </button>
           `).join('')}
         </div>
         <div class="color-controls">
-          <label><span>Cor principal</span><input id="accentColor" type="color" value="${esc(state.settings.customAccent || themePresets.spatial.accent)}" /></label>
-          <label><span>Luz ambiente</span><input id="ambientColor" type="color" value="${esc(state.settings.customAmbient || themePresets.spatial.ambient)}" /></label>
-          <label class="intensity-control"><span>Intensidade</span><input id="colorIntensity" type="range" min="0" max="100" value="${esc(state.settings.colorIntensity ?? 62)}" /></label>
+          <label><span>Destaque</span><input id="accentColor" type="color" value="${esc(activePalette.accent)}" /></label>
+          <label><span>Fundo</span><input id="backgroundColor" type="color" value="${esc(activePalette.background)}" /></label>
+          <label><span>Glass</span><input id="glassColor" type="color" value="${esc(activePalette.glass)}" /></label>
+          <label><span>Cards</span><input id="moduleColor" type="color" value="${esc(activePalette.module)}" /></label>
+          <label><span>Glow</span><input id="glowColor" type="color" value="${esc(activePalette.glow)}" /></label>
+        </div>
+        <div class="appearance-sliders">
+          <label><span>Glow <output id="glowIntensityValue">${esc(activePalette.intensity)}%</output></span><input id="colorIntensity" type="range" min="0" max="100" value="${esc(activePalette.intensity)}" /></label>
+          <label><span>Transparência glass <output id="glassOpacityValue">${esc(activePalette.glassOpacity)}%</output></span><input id="glassOpacity" type="range" min="20" max="100" value="${esc(activePalette.glassOpacity)}" /></label>
+          <label><span>Transparência cards <output id="moduleOpacityValue">${esc(activePalette.moduleOpacity)}%</output></span><input id="moduleOpacity" type="range" min="20" max="100" value="${esc(activePalette.moduleOpacity)}" /></label>
+          <label><span>Blur glass <output id="glassBlurValue">${esc(activePalette.glassBlur)}px</output></span><input id="glassBlur" type="range" min="0" max="50" value="${esc(activePalette.glassBlur)}" /></label>
         </div>
       </section>
       <div class="settings-list">
@@ -1519,32 +1574,64 @@
     const refreshThemeButtons = () => {
       $$('.theme-preset').forEach((button) => button.classList.toggle('active', button.dataset.themeChoice === state.settings.theme));
     };
+    const refreshAppearanceOutputs = () => {
+      $('#glowIntensityValue').textContent = `${$('#colorIntensity').value}%`;
+      $('#glassOpacityValue').textContent = `${$('#glassOpacity').value}%`;
+      $('#moduleOpacityValue').textContent = `${$('#moduleOpacity').value}%`;
+      $('#glassBlurValue').textContent = `${$('#glassBlur').value}px`;
+    };
+    const syncAppearanceInputs = (palette) => {
+      $('#accentColor').value = palette.accent;
+      $('#backgroundColor').value = palette.background;
+      $('#glassColor').value = palette.glass;
+      $('#moduleColor').value = palette.module;
+      $('#glowColor').value = palette.glow;
+      $('#colorIntensity').value = palette.intensity;
+      $('#glassOpacity').value = palette.glassOpacity;
+      $('#moduleOpacity').value = palette.moduleOpacity;
+      $('#glassBlur').value = palette.glassBlur;
+      refreshAppearanceOutputs();
+    };
     $$('.theme-preset').forEach((button) => {
       button.onclick = () => {
         state.settings.theme = button.dataset.themeChoice;
         const preset = themePresets[state.settings.theme];
         state.settings.customAccent = preset.accent;
-        state.settings.customAmbient = preset.ambient;
-        $('#accentColor').value = preset.accent;
-        $('#ambientColor').value = preset.ambient;
+        state.settings.customBackground = preset.background;
+        state.settings.customGlass = preset.glass;
+        state.settings.customModule = preset.module;
+        state.settings.customGlow = preset.glow;
+        state.settings.customAmbient = preset.glow;
+        state.settings.colorIntensity = preset.intensity;
+        state.settings.glassOpacity = preset.glassOpacity;
+        state.settings.moduleOpacity = preset.moduleOpacity;
+        state.settings.glassBlur = preset.glassBlur;
+        syncAppearanceInputs(preset);
         applyAppearance();
         save();
         refreshThemeButtons();
         haptic('select');
       };
     });
-    const applyCustomColors = () => {
+    const applyCustomAppearance = () => {
       state.settings.theme = 'custom';
       state.settings.customAccent = $('#accentColor').value;
-      state.settings.customAmbient = $('#ambientColor').value;
+      state.settings.customBackground = $('#backgroundColor').value;
+      state.settings.customGlass = $('#glassColor').value;
+      state.settings.customModule = $('#moduleColor').value;
+      state.settings.customGlow = $('#glowColor').value;
+      state.settings.customAmbient = state.settings.customGlow;
       state.settings.colorIntensity = Number($('#colorIntensity').value);
+      state.settings.glassOpacity = Number($('#glassOpacity').value);
+      state.settings.moduleOpacity = Number($('#moduleOpacity').value);
+      state.settings.glassBlur = Number($('#glassBlur').value);
+      refreshAppearanceOutputs();
       applyAppearance();
       save();
       refreshThemeButtons();
     };
-    $('#accentColor').oninput = applyCustomColors;
-    $('#ambientColor').oninput = applyCustomColors;
-    $('#colorIntensity').oninput = applyCustomColors;
+    ['accentColor', 'backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'colorIntensity', 'glassOpacity', 'moduleOpacity', 'glassBlur']
+      .forEach((id) => { $(`#${id}`).oninput = applyCustomAppearance; });
     $('#motionToggle').onchange = (event) => { state.settings.motion = event.target.checked; applyAppearance(); save(); };
     $('#hapticToggle').onchange = (event) => { state.settings.haptics = event.target.checked; save(); haptic('select'); };
     $('#swipeLeft').onchange = (event) => { state.settings.swipeLeft = event.target.value; save(); };
@@ -1910,7 +1997,7 @@
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=12').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=13').catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
