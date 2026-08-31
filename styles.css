@@ -793,28 +793,6 @@ html[data-motion="off"] *,html[data-motion="off"] *::before,html[data-motion="of
   .toast-layer{top:78px;right:10px}
 }
 
-@media (display-mode:standalone) and (max-width:760px){
-  body::after{
-    content:"";
-    position:fixed;
-    z-index:40;
-    left:0;
-    right:0;
-    bottom:0;
-    height:108px;
-    pointer-events:none;
-    background:linear-gradient(
-      to bottom,
-      transparent 0%,
-      color-mix(in srgb,var(--system-edge) 28%,transparent) 24%,
-      color-mix(in srgb,var(--system-edge) 78%,transparent) 58%,
-      var(--system-edge) 84%,
-      var(--system-edge) 100%
-    );
-    transform:translateZ(0);
-  }
-}
-
 @media(max-width:390px){
   .auth-stage{min-height:calc(100dvh - 18px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}.auth-gate{padding:calc(9px + env(safe-area-inset-top)) 9px calc(9px + env(safe-area-inset-bottom))}.auth-entry{padding:23px 20px 18px}.auth-brand{margin-bottom:27px}.auth-message h1{font-size:32px}.auth-trust span:last-child{display:none}.auth-visual{min-height:150px}
   .assistant-trigger span:last-child{display:none}
