@@ -111,6 +111,24 @@
   }
 
   const weekdayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const projectIconOptions = [
+    { value: '✦', label: 'Destaque' },
+    { value: '◎', label: 'Meta' },
+    { value: '◆', label: 'Negócio' },
+    { value: '⌁', label: 'Rotina' },
+    { value: '☰', label: 'Lista' },
+    { value: '♟', label: 'Estratégia' },
+    { value: '✎', label: 'Estudos' },
+    { value: '⌂', label: 'Casa' },
+    { value: '▣', label: 'Trabalho' },
+    { value: '☑', label: 'Tarefas' },
+    { value: '$', label: 'Finanças' },
+    { value: '↗', label: 'Crescimento' },
+    { value: '♡', label: 'Saúde' },
+    { value: '⇢', label: 'Viagem' },
+    { value: '⚙', label: 'Sistema' },
+    { value: '◉', label: 'Foco' }
+  ];
   const defaultProjects = () => [
     { id: 'routine', title: 'Rotina Milionária', shortTitle: 'Rotina', description: 'Estudo, trabalho e execução diária.', icon: '✦', createdAt: Date.now() },
     { id: 'gym', title: 'Projeto GYM — Greko Romano', shortTitle: 'GYM', description: 'Treinos, refeições e recuperação.', icon: '◉', createdAt: Date.now() }
@@ -123,6 +141,26 @@
   function projectShortTitle(title = '') {
     const clean = String(title).trim();
     return (clean.split(/[—–-]/)[0].trim().split(/\s+/).slice(0, 2).join(' ') || 'Projeto').slice(0, 24);
+  }
+
+  function validProjectIcon(value, fallback = '✦') {
+    const clean = String(value || '').trim();
+    return projectIconOptions.some((option) => option.value === clean) ? clean : fallback;
+  }
+
+  function projectIconPicker(selected = '✦') {
+    const active = validProjectIcon(selected);
+    return `
+      <div class="field full project-icon-field">
+        <label id="projectIconLabel">Ícone</label>
+        <input id="projectIconInput" name="icon" type="hidden" value="${esc(active)}" />
+        <div class="project-icon-picker" role="radiogroup" aria-labelledby="projectIconLabel">
+          ${projectIconOptions.map((option) => `
+            <button class="project-icon-option ${option.value === active ? 'selected' : ''}" data-project-icon="${esc(option.value)}" type="button" role="radio" aria-checked="${option.value === active}" aria-label="${esc(option.label)}" title="${esc(option.label)}">${esc(option.value)}</button>
+          `).join('')}
+        </div>
+      </div>
+    `;
   }
 
   function sanitizeProject(project = {}, index = 0) {
@@ -819,7 +857,7 @@
       title,
       shortTitle: projectShortTitle(title),
       description: String(data.description || '').trim() || 'Tarefas e próximos passos.',
-      icon: String(data.icon || '').trim() || existing?.icon || '✦',
+      icon: validProjectIcon(data.icon, validProjectIcon(existing?.icon)),
       createdAt: existing?.createdAt || Date.now()
     }, state.projects.length);
     if (existing) Object.assign(existing, project);
@@ -1442,8 +1480,8 @@
       </div>
       <form id="projectForm">
         <div class="project-form-grid">
-          <div class="field project-icon-field"><label>Ícone</label><input name="icon" maxlength="4" value="${esc(project?.icon || '✦')}" aria-label="Ícone do projeto" /></div>
-          <div class="field"><label>Nome do projeto</label><input name="title" required maxlength="70" value="${esc(project?.title || '')}" placeholder="Ex.: Empresa, Viagem, Russo…" /></div>
+          ${projectIconPicker(project?.icon || '✦')}
+          <div class="field full"><label>Nome do projeto</label><input name="title" required maxlength="70" value="${esc(project?.title || '')}" placeholder="Ex.: Empresa, Viagem, Russo…" /></div>
           <div class="field full"><label>Descrição</label><textarea name="description" maxlength="140" placeholder="O objetivo deste projeto">${esc(project?.description || '')}</textarea></div>
         </div>
         <div class="modal-actions">
@@ -1453,6 +1491,18 @@
         </div>
       </form>
     `, 'project-modal');
+    const iconInput = $('#projectIconInput');
+    $$('.project-icon-option', $('#projectForm')).forEach((button) => {
+      button.onclick = () => {
+        iconInput.value = button.dataset.projectIcon;
+        $$('.project-icon-option', $('#projectForm')).forEach((option) => {
+          const selected = option === button;
+          option.classList.toggle('selected', selected);
+          option.setAttribute('aria-checked', String(selected));
+        });
+        haptic('select');
+      };
+    });
     $('#projectForm').onsubmit = (event) => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -2502,7 +2552,7 @@
       freshUrl.searchParams.set('build', '20');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=20').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=21').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
