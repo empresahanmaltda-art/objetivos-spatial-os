@@ -1407,6 +1407,75 @@
     if (wasLocked && scroller) scroller.scrollTop = modalScrollY;
   }
 
+  const canvasDiagnosticStages = [
+    { title: 'App completo', detail: 'Nenhuma camada removida.' },
+    { title: 'Sem o botão +', detail: 'Remove somente o botão flutuante.' },
+    { title: 'Sem a navegação', detail: 'Remove também Hoje, Projetos e Metas.' },
+    { title: 'Sem o painel', detail: 'Remove também tarefas, projetos e metas.' },
+    { title: 'Sem o topo', detail: 'Remove também logo e ações superiores.' },
+    { title: 'Sem os efeitos de fundo', detail: 'Remove também glow, ambiente e textura.' },
+    { title: 'Somente o canvas verde', detail: 'Remove toda a interface; resta apenas a área realmente desenhada pelo site.' }
+  ];
+  let canvasDiagnosticStage = 0;
+
+  function canvasViewportMetrics() {
+    const screenHeight = Math.round(Number(globalThis.screen?.height) || 0);
+    const innerHeight = Math.round(Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0);
+    const clientHeight = Math.round(Number(document.documentElement?.clientHeight) || 0);
+    const visualHeight = Math.round(Number(globalThis.visualViewport?.height) || innerHeight);
+    return { screenHeight, innerHeight, clientHeight, visualHeight, gap: Math.max(0, screenHeight - innerHeight) };
+  }
+
+  function renderCanvasDiagnostic() {
+    const controller = $('#canvasDiagnosticController');
+    if (!controller) return;
+    const stage = canvasDiagnosticStages[canvasDiagnosticStage];
+    const metrics = canvasViewportMetrics();
+    controller.innerHTML = `
+      <div class="canvas-diagnostic-copy">
+        <span>DIAGNÓSTICO ${canvasDiagnosticStage + 1}/${canvasDiagnosticStages.length}</span>
+        <strong>${esc(stage.title)}</strong>
+        <small>${esc(stage.detail)}</small>
+        <output>Tela ${metrics.screenHeight}px · app ${metrics.innerHeight}px · canvas ${metrics.clientHeight}px · visual ${metrics.visualHeight}px · diferença ${metrics.gap}px</output>
+      </div>
+      <div class="canvas-diagnostic-actions">
+        <button type="button" data-canvas-diagnostic-prev ${canvasDiagnosticStage === 0 ? 'disabled' : ''}>Anterior</button>
+        <button type="button" data-canvas-diagnostic-next ${canvasDiagnosticStage === canvasDiagnosticStages.length - 1 ? 'disabled' : ''}>Próximo</button>
+        <button type="button" data-canvas-diagnostic-stop>Fechar</button>
+      </div>
+    `;
+    $('[data-canvas-diagnostic-prev]', controller).onclick = () => setCanvasDiagnosticStage(canvasDiagnosticStage - 1);
+    $('[data-canvas-diagnostic-next]', controller).onclick = () => setCanvasDiagnosticStage(canvasDiagnosticStage + 1);
+    $('[data-canvas-diagnostic-stop]', controller).onclick = stopCanvasDiagnostic;
+  }
+
+  function setCanvasDiagnosticStage(stage) {
+    canvasDiagnosticStage = clamp(Number(stage) || 0, 0, canvasDiagnosticStages.length - 1);
+    document.documentElement.dataset.canvasDiagnostic = String(canvasDiagnosticStage);
+    renderCanvasDiagnostic();
+  }
+
+  function stopCanvasDiagnostic() {
+    delete document.documentElement.dataset.canvasDiagnostic;
+    document.body?.classList.remove('canvas-diagnostic-active');
+    $('#canvasDiagnosticController')?.remove();
+    canvasDiagnosticStage = 0;
+    applyAppearance();
+  }
+
+  function startCanvasDiagnostic() {
+    closeModal();
+    $('#canvasDiagnosticController')?.remove();
+    const controller = document.createElement('aside');
+    controller.id = 'canvasDiagnosticController';
+    controller.className = 'canvas-diagnostic-controller';
+    controller.setAttribute('role', 'dialog');
+    controller.setAttribute('aria-label', 'Diagnóstico do canvas');
+    document.body.append(controller);
+    document.body.classList.add('canvas-diagnostic-active');
+    setCanvasDiagnosticStage(0);
+  }
+
   function repeatPresetFor(task) {
     const repeat = task?.repeat || normalizeRepeat(task || {});
     if (!repeat) return 'none';
@@ -2026,6 +2095,10 @@
           <div><button class="soft-button" id="exportBtn" type="button">Exportar</button> <button class="soft-button" id="importBtn" type="button">Importar</button><input id="importFile" type="file" accept="application/json" hidden /></div>
         </div>
         <div class="setting-row">
+          <div class="setting-copy"><strong>Diagnóstico do canvas</strong><span>Remove cada camada visual em sequência para identificar a faixa inferior. É temporário e não altera seus dados.</span></div>
+          <button class="soft-button" id="canvasDiagnosticBtn" type="button">Iniciar teste</button>
+        </div>
+        <div class="setting-row">
           <div class="setting-copy"><strong>Progresso das metas</strong><span>Zera somente o realizado; mantém alvos e prazos.</span></div>
           <button class="danger-button" id="resetGoalsBtn" type="button">Zerar</button>
         </div>
@@ -2172,6 +2245,7 @@
       toast('Rotina recorrente restaurada.');
     };
     $('#exportBtn').onclick = exportBackup;
+    $('#canvasDiagnosticBtn').onclick = startCanvasDiagnostic;
     $('#importBtn').onclick = () => $('#importFile').click();
     $('#importFile').onchange = async (event) => {
       const file = event.target.files?.[0];
@@ -2551,10 +2625,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '20');
+      freshUrl.searchParams.set('build', '25');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=24').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=25').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
@@ -2574,6 +2648,9 @@
     projectForTask,
     setView,
     selectPlannerDate,
+    startCanvasDiagnostic,
+    setCanvasDiagnosticStage,
+    stopCanvasDiagnostic,
     syncSystemDay,
     applyCloudState(input) {
       const currentView = state.view;
