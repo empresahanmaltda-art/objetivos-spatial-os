@@ -20,6 +20,7 @@
   --bg-a:#554e46;
   --bg-b:#302c28;
   --bg-c:#171614;
+  --system-edge:#171614;
   --app-background:
     radial-gradient(circle at 16% 7%,rgb(var(--ambient-rgb)/var(--ambient-alpha)),transparent 32rem),
     radial-gradient(circle at 92% 82%,rgb(var(--accent-rgb)/.1),transparent 30rem),
@@ -790,6 +791,28 @@ html[data-motion="off"] *,html[data-motion="off"] *::before,html[data-motion="of
   .swipe-setting{flex-wrap:wrap}.swipe-selects{width:100%;justify-content:flex-end}
   .color-controls{grid-template-columns:repeat(3,minmax(0,1fr))}
   .toast-layer{top:78px;right:10px}
+}
+
+@media (display-mode:standalone) and (max-width:760px){
+  body::after{
+    content:"";
+    position:fixed;
+    z-index:40;
+    left:0;
+    right:0;
+    bottom:0;
+    height:108px;
+    pointer-events:none;
+    background:linear-gradient(
+      to bottom,
+      transparent 0%,
+      color-mix(in srgb,var(--system-edge) 28%,transparent) 24%,
+      color-mix(in srgb,var(--system-edge) 78%,transparent) 58%,
+      var(--system-edge) 84%,
+      var(--system-edge) 100%
+    );
+    transform:translateZ(0);
+  }
 }
 
 @media(max-width:390px){
