@@ -588,7 +588,9 @@
     root.style.setProperty('--shadow', `0 30px 80px rgba(4,6,8,.4),0 0 ${Math.round(12 + intensity * .34)}px rgb(${hexToRgb(glow, '149 139 127')} / ${(.025 + intensity * .0012).toFixed(3)}),inset 0 1px 0 rgba(255,255,255,.06)`);
     const themeMeta = $('meta[name="theme-color"]');
     const backgroundThemeColor = custom || savedPreset ? `rgb(${blendRgb(background, '#060708', .56)})` : preset.themeColor;
-    if (themeMeta) themeMeta.setAttribute('content', document.body?.classList.contains('modal-open') ? '#111315' : backgroundThemeColor);
+    const systemEdgeColor = document.body?.classList.contains('modal-open') ? '#111315' : backgroundThemeColor;
+    root.style.setProperty('--system-edge', systemEdgeColor);
+    if (themeMeta) themeMeta.setAttribute('content', systemEdgeColor);
   }
 
   function haptic(kind = 'tap') {
@@ -2552,7 +2554,7 @@
       freshUrl.searchParams.set('build', '20');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=21').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=23').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
