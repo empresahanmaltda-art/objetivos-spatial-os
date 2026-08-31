@@ -14,6 +14,7 @@
   const INSTANCE_ID = uid('tab');
   const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char]);
   const normalize = (value = '') => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  let state = null;
 
   function localISO(date = new Date()) {
     const year = date.getFullYear();
@@ -110,20 +111,63 @@
   }
 
   const weekdayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-  const taskProjects = [
-    { id: 'routine', title: 'Rotina Milionária', shortTitle: 'Rotina', description: 'Estudo, trabalho e execução diária.', icon: '✦' },
-    { id: 'gym', title: 'Projeto GYM — Greko Romano', shortTitle: 'GYM', description: 'Treinos, refeições e recuperação.', icon: '◉' }
+  const defaultProjects = () => [
+    { id: 'routine', title: 'Rotina Milionária', shortTitle: 'Rotina', description: 'Estudo, trabalho e execução diária.', icon: '✦', createdAt: Date.now() },
+    { id: 'gym', title: 'Projeto GYM — Greko Romano', shortTitle: 'GYM', description: 'Treinos, refeições e recuperação.', icon: '◉', createdAt: Date.now() }
   ];
-  const taskProjectIds = new Set(taskProjects.map((project) => project.id));
   const gymRoutineKeys = new Set([
     'breakfast', 'lunch', 'snack', 'meal-four', 'meal-five', 'dinner', 'supper',
     'body-main', 'body-tue', 'body-fri', 'meal-prep'
   ]);
 
-  function projectForTask(task = {}) {
+  function projectShortTitle(title = '') {
+    const clean = String(title).trim();
+    return (clean.split(/[—–-]/)[0].trim().split(/\s+/).slice(0, 2).join(' ') || 'Projeto').slice(0, 24);
+  }
+
+  function sanitizeProject(project = {}, index = 0) {
+    const fallback = defaultProjects()[index] || {};
+    const fallbackId = fallback.id || `project-${index + 1}`;
+    const id = String(project.id || fallbackId).replace(/[^a-z0-9-]/gi, '').slice(0, 80) || fallbackId;
+    const title = String(project.title || fallback.title || `Projeto ${index + 1}`).trim().slice(0, 70) || `Projeto ${index + 1}`;
+    return {
+      id,
+      title,
+      shortTitle: String(project.shortTitle || projectShortTitle(title)).trim().slice(0, 24) || projectShortTitle(title),
+      description: String(project.description || fallback.description || 'Tarefas e próximos passos.').trim().slice(0, 140),
+      icon: String(project.icon || fallback.icon || '✦').trim().slice(0, 4) || '✦',
+      createdAt: Number(project.createdAt) || Date.now()
+    };
+  }
+
+  function sanitizeProjects(input) {
+    const source = Array.isArray(input) && input.length ? input : defaultProjects();
+    const seen = new Set();
+    const projects = source.slice(0, 40).map(sanitizeProject).filter((project) => {
+      if (seen.has(project.id)) return false;
+      seen.add(project.id);
+      return true;
+    });
+    return projects.length ? projects : defaultProjects();
+  }
+
+  function activeProjects() {
+    return Array.isArray(state?.projects) && state.projects.length ? state.projects : defaultProjects();
+  }
+
+  function projectExists(projectId, projects = activeProjects()) {
+    return projects.some((project) => project.id === projectId);
+  }
+
+  function projectForTask(task = {}, projects = activeProjects()) {
     const routineKey = String(task.id || '').match(/^routine-v\d+-(.+)$/)?.[1] || '';
-    const projectId = taskProjectIds.has(task.projectId) ? task.projectId : gymRoutineKeys.has(routineKey) ? 'gym' : 'routine';
-    return taskProjects.find((project) => project.id === projectId) || taskProjects[0];
+    const inferredId = gymRoutineKeys.has(routineKey) && projectExists('gym', projects) ? 'gym' : projectExists('routine', projects) ? 'routine' : projects[0].id;
+    const projectId = projectExists(task.projectId, projects) ? task.projectId : inferredId;
+    return projects.find((project) => project.id === projectId) || projects[0];
+  }
+
+  function projectTaskKey(task = {}) {
+    return task.routine ? `routine:${normalize(task.title) || task.id}` : task.id;
   }
 
   function weeklyRepeat(days, mode = 'scheduled') {
@@ -258,13 +302,16 @@
   function freshState() {
     const settings = defaultSettings();
     settings.routineVersion = ROUTINE_VERSION;
+    const projects = defaultProjects();
     return {
-      version: 4,
+      version: 5,
       view: 'today',
       selectedDate: localISO(),
-      selectedProject: 'routine',
+      selectedProject: projects[0].id,
       plannerMonth: localISO().slice(0, 7) + '-01',
+      plannerDate: '',
       lastSystemDate: localISO(),
+      projects,
       tasks: seedRoutine(),
       goals: seedGoals(),
       settings,
@@ -293,7 +340,7 @@
     return null;
   }
 
-  function sanitizeTask(task = {}) {
+  function sanitizeTask(task = {}, projects = activeProjects()) {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(task.date || '') ? task.date : localISO();
     const repeat = normalizeRepeat({ ...task, date });
     const time = /^\d{2}:\d{2}$/.test(task.time || '') ? task.time : '';
@@ -306,7 +353,7 @@
       recurrence: repeat ? (repeat.type === 'day' && repeat.interval === 1 ? 'daily' : 'custom') : 'none',
       repeat,
       goalId: task.goalId || '',
-      projectId: projectForTask(task).id,
+      projectId: projectForTask(task, projects).id,
       notes: String(task.notes || ''),
       reminder: time ? REMINDER_MINUTES[0] : null,
       reminders: time ? [...REMINDER_MINUTES] : [],
@@ -401,16 +448,19 @@
           current: previousVersion < 3 && seededGoalIds.has(goal.id) ? 0 : Math.max(0, Number(goal.current) || 0)
         }))
       : seedGoals();
+    const projects = sanitizeProjects(input.projects);
     const next = {
       ...base,
       ...input,
-      version: 4,
+      version: 5,
       view: ['today', 'upcoming', 'goals'].includes(input.view) ? input.view : 'today',
       selectedDate: /^\d{4}-\d{2}-\d{2}$/.test(input.selectedDate || '') ? input.selectedDate : localISO(),
-      selectedProject: taskProjectIds.has(input.selectedProject) ? input.selectedProject : 'routine',
+      selectedProject: projectExists(input.selectedProject, projects) ? input.selectedProject : projects[0].id,
       plannerMonth: /^\d{4}-\d{2}-01$/.test(input.plannerMonth || '') ? input.plannerMonth : localISO().slice(0, 7) + '-01',
+      plannerDate: /^\d{4}-\d{2}-\d{2}$/.test(input.plannerDate || '') ? input.plannerDate : '',
       lastSystemDate: storedSystemDate || localISO(),
-      tasks: Array.isArray(input.tasks) ? input.tasks.map(sanitizeTask) : [],
+      projects,
+      tasks: Array.isArray(input.tasks) ? input.tasks.map((task) => sanitizeTask(task, projects)) : [],
       goals,
       settings
     };
@@ -431,7 +481,7 @@
     return migrated;
   }
 
-  let state = loadState();
+  state = loadState();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   let channel = null;
   let suppressBroadcast = false;
@@ -760,6 +810,47 @@
     toast('Tarefa removida.');
   }
 
+  function upsertProject(data, existingId = null) {
+    const existing = state.projects.find((project) => project.id === existingId);
+    const title = String(data.title || '').trim().slice(0, 70);
+    if (!title) return null;
+    const project = sanitizeProject({
+      id: existing?.id || uid('project'),
+      title,
+      shortTitle: projectShortTitle(title),
+      description: String(data.description || '').trim() || 'Tarefas e próximos passos.',
+      icon: String(data.icon || '').trim() || existing?.icon || '✦',
+      createdAt: existing?.createdAt || Date.now()
+    }, state.projects.length);
+    if (existing) Object.assign(existing, project);
+    else state.projects.push(project);
+    state.selectedProject = project.id;
+    state.plannerDate = '';
+    save();
+    render();
+    return project;
+  }
+
+  function deleteProject(projectId) {
+    const project = state.projects.find((item) => item.id === projectId);
+    if (!project) return false;
+    if (state.projects.length <= 1) {
+      toast('Crie outro projeto antes de excluir este.');
+      return false;
+    }
+    const replacement = state.projects.find((item) => item.id !== projectId);
+    state.tasks.forEach((task) => {
+      if (task.projectId === projectId) task.projectId = replacement.id;
+    });
+    state.projects = state.projects.filter((item) => item.id !== projectId);
+    state.selectedProject = replacement.id;
+    state.plannerDate = '';
+    save();
+    render();
+    toast(`Projeto removido. As tarefas foram para “${replacement.title}”.`);
+    return true;
+  }
+
   function upsertTask(data, existingId = null) {
     const existing = state.tasks.find((task) => task.id === existingId);
     const date = data.date || state.selectedDate || localISO();
@@ -778,7 +869,7 @@
       recurrence: repeat ? (repeat.type === 'day' && repeat.interval === 1 ? 'daily' : 'custom') : 'none',
       repeat,
       goalId: data.goalId || '',
-      projectId: taskProjectIds.has(data.projectId) ? data.projectId : existing?.projectId || 'routine',
+      projectId: projectExists(data.projectId) ? data.projectId : projectExists(existing?.projectId) ? existing.projectId : state.projects[0].id,
       notes: String(data.notes || '').trim(),
       reminder: time ? REMINDER_MINUTES[0] : null,
       reminders: time ? [...REMINDER_MINUTES] : [],
@@ -891,6 +982,16 @@
     haptic('select');
   }
 
+  function selectPlannerDate(date, direction = 'forward') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return;
+    motionDirection = direction;
+    state.plannerDate = date;
+    state.selectedDate = date;
+    save();
+    render();
+    haptic('select');
+  }
+
   function animatedToggleTask(button, taskId, date) {
     const card = button?.closest?.('.task-card');
     if (!card || state.settings.motion === false) {
@@ -901,8 +1002,9 @@
     setTimeout(() => toggleTask(taskId, date), 260);
   }
 
-  function taskCard(task, date, { overdue = false, completed = false, showDate = false, scheduleText = '' } = {}) {
+  function taskCard(task, date, { overdue = false, completed = false, showDate = false, showProject = false, scheduleText = '' } = {}) {
     const goal = goalById(task.goalId);
+    const project = showProject ? projectForTask(task) : null;
     const recurrence = scheduleText || recurrenceLabel(task);
     const taskDate = overdue ? formatShortDate(task.date) : showDate ? formatShortDate(date) : '';
     const time = task.time || 'sem horário';
@@ -918,6 +1020,7 @@
             <span>· ${esc(formatDuration(task.duration))}</span>
             ${recurrence ? `<span>↻ ${esc(recurrence)}</span>` : ''}
             ${task.reminder != null && task.time ? '<span aria-label="Lembrete ativo">◴</span>' : ''}
+            ${project ? `<span class="project-link">${esc(project.icon)} ${esc(project.shortTitle)}</span>` : ''}
             ${goal ? `<span class="goal-link"># ${esc(goal.title)}</span>` : ''}
           </div>
         </div>
@@ -926,7 +1029,7 @@
     `;
   }
 
-  function completedDrawer(completed, date) {
+  function completedDrawer(completed, date, cardOptions = {}) {
     if (!completed.length) return '';
     return `
       <section class="completed-drawer" id="completedDrawer">
@@ -935,7 +1038,7 @@
           <span>${completed.length} concluída${completed.length === 1 ? '' : 's'} — toque para ver</span>
         </button>
         <div class="completed-list">
-          ${completed.map((task) => taskCard(task, date, { completed: true })).join('')}
+          ${completed.map((task) => taskCard(task, date, { ...cardOptions, completed: true })).join('')}
         </div>
       </section>
     `;
@@ -1028,20 +1131,21 @@
           ${cells.map((date) => {
             if (!date) return '<span class="planner-day-empty"></span>';
             const taskCount = tasksForDate(date, { includeCompleted: false }).length;
-            return `<button class="planner-day ${date === localISO() ? 'today' : ''} ${taskCount ? 'has-tasks' : ''}" data-action="selectPlannerDate" data-date="${date}" type="button" aria-label="${esc(formatLongDate(date))}, ${taskCount} tarefa${taskCount === 1 ? '' : 's'}"><span>${parseISO(date).getDate()}</span>${taskCount ? '<i></i>' : ''}</button>`;
+            return `<button class="planner-day ${date === localISO() ? 'today' : ''} ${date === state.plannerDate ? 'selected' : ''} ${taskCount ? 'has-tasks' : ''}" data-action="selectPlannerDate" data-date="${date}" type="button" aria-pressed="${date === state.plannerDate}" aria-label="${esc(formatLongDate(date))}, ${taskCount} tarefa${taskCount === 1 ? '' : 's'}"><span>${parseISO(date).getDate()}</span>${taskCount ? '<i></i>' : ''}</button>`;
           }).join('')}
         </div>
-        <p>Toque em um dia para abrir somente a agenda dele.</p>
+        <p>Toque em um dia e as tarefas dele aparecem logo abaixo, sem sair de Projetos.</p>
       </section>
     `;
   }
 
   function renderProjectBrowser() {
-    const selectedProject = taskProjects.find((project) => project.id === state.selectedProject) || taskProjects[0];
+    const projects = activeProjects();
+    const selectedProject = projects.find((project) => project.id === state.selectedProject) || projects[0];
     const groupedProjectEntries = (projectId) => {
       const groups = new Map();
-      state.tasks.filter((task) => projectForTask(task).id === projectId).forEach((task) => {
-        const key = normalize(task.title) || task.id;
+      state.tasks.filter((task) => projectForTask(task, projects).id === projectId).forEach((task) => {
+        const key = projectTaskKey(task);
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(task);
       });
@@ -1057,14 +1161,17 @@
       .sort((a, b) => a.date.localeCompare(b.date) || minutesFromTime(a.task.time) - minutesFromTime(b.task.time) || a.task.title.localeCompare(b.task.title, 'pt-BR'));
     return `
       <section class="project-browser">
+        <div class="project-browser-head">
+          <div><span>Meus projetos</span><strong>${projects.length} projeto${projects.length === 1 ? '' : 's'}</strong></div>
+        </div>
         <div class="project-switcher" role="tablist" aria-label="Projetos">
-          ${taskProjects.map((project) => {
-            const projectTasks = state.tasks.filter((task) => projectForTask(task).id === project.id);
-            const logicalCount = new Set(projectTasks.map((task) => normalize(task.title) || task.id)).size;
-            const todayCount = new Set(projectTasks.filter((task) => isTaskOnDate(task, localISO()) && !isTaskDone(task, localISO())).map((task) => normalize(task.title) || task.id)).size;
+          ${projects.map((project) => {
+            const projectTasks = state.tasks.filter((task) => projectForTask(task, projects).id === project.id);
+            const logicalCount = new Set(projectTasks.map(projectTaskKey)).size;
+            const todayCount = new Set(projectTasks.filter((task) => isTaskOnDate(task, localISO()) && !isTaskDone(task, localISO())).map(projectTaskKey)).size;
             return `
               <button class="project-card ${project.id === selectedProject.id ? 'active' : ''}" data-action="selectProject" data-id="${project.id}" type="button" role="tab" aria-selected="${project.id === selectedProject.id}">
-                <span class="project-icon">${project.icon}</span>
+                <span class="project-icon">${esc(project.icon)}</span>
                 <span class="project-card-copy"><strong>${esc(project.title)}</strong><small>${logicalCount} tarefas${todayCount ? ` · ${todayCount} hoje` : ''}</small></span>
                 <span class="project-arrow">›</span>
               </button>
@@ -1073,7 +1180,11 @@
         </div>
         <div class="project-list-head">
           <div><span>${esc(selectedProject.shortTitle)}</span><strong>${esc(selectedProject.description)}</strong></div>
-          <small>${projectEntries.length} ativa${projectEntries.length === 1 ? '' : 's'}</small>
+          <div class="project-list-actions">
+            <small>${projectEntries.length} ativa${projectEntries.length === 1 ? '' : 's'}</small>
+            <button data-action="editProject" data-id="${selectedProject.id}" type="button" aria-label="Editar ${esc(selectedProject.title)}">•••</button>
+            <button data-action="addTask" data-project-id="${selectedProject.id}" type="button">+ Tarefa</button>
+          </div>
         </div>
         ${projectEntries.length
           ? `<div class="task-list project-task-list">${projectEntries.map(({ task, date, variants }) => taskCard(task, date, { showDate: true, scheduleText: variants > 1 ? `${variants} horários semanais` : '' })).join('')}</div>`
@@ -1082,13 +1193,36 @@
     `;
   }
 
+  function renderPlannerDay() {
+    const date = state.plannerDate;
+    const all = tasksForDate(date);
+    const pending = all.filter((task) => !isTaskDone(task, date));
+    const completed = all.filter((task) => isTaskDone(task, date));
+    const totalMinutes = pending.reduce((sum, task) => sum + (Number(task.duration) || 0), 0);
+    return `
+      <section class="planner-day-panel" aria-label="Tarefas de ${esc(formatLongDate(date))}">
+        <div class="planner-day-head">
+          <div><span>${esc(formatDayLabel(date))}</span><strong>${esc(formatLongDate(date))}</strong><small>${pending.length ? `${pending.length} tarefa${pending.length === 1 ? '' : 's'} · ${formatDuration(totalMinutes)}` : 'Nenhuma pendência'}</small></div>
+          <div>
+            <button class="soft-button" data-action="clearPlannerDate" type="button">Projetos</button>
+            <button class="primary-button" data-action="addTask" data-date="${date}" type="button">+ Tarefa</button>
+          </div>
+        </div>
+        ${pending.length
+          ? `<div class="task-list">${pending.map((task) => taskCard(task, date, { showProject: true })).join('')}</div>`
+          : `<div class="project-empty"><span>✓</span><strong>Dia livre</strong><p>Nenhuma tarefa programada para esta data.</p></div>`}
+        ${completedDrawer(completed, date, { showProject: true })}
+      </section>
+    `;
+  }
+
   function renderUpcoming() {
     return `
       <div class="view-enter">
-        ${viewHead('Organização', 'Projetos', 'Cada tarefa aparece uma vez. O calendário abre apenas o dia escolhido.', '<button class="primary-button" data-action="addTask" type="button">+ <span>Tarefa</span></button>')}
+        ${viewHead('Organização', 'Projetos', 'Crie projetos e organize as tarefas dentro de cada um.', '<button class="primary-button" data-action="addProject" type="button">+ <span>Projeto</span></button>')}
         <div class="projects-layout">
           ${plannerCalendar()}
-          ${renderProjectBrowser()}
+          ${state.plannerDate ? renderPlannerDay() : renderProjectBrowser()}
         </div>
       </div>
     `;
@@ -1298,15 +1432,56 @@
     return data;
   }
 
-  function taskModal(taskId = null, presetDate = null) {
+  function projectModal(projectId = null) {
+    const project = state.projects.find((item) => item.id === projectId);
+    const taskCount = project ? state.tasks.filter((task) => task.projectId === project.id).length : 0;
+    openModal(`
+      <div class="modal-head">
+        <div><h2>${project ? 'Editar projeto' : 'Novo projeto'}</h2><p>Crie o espaço e adicione as tarefas dele.</p></div>
+        <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <form id="projectForm">
+        <div class="project-form-grid">
+          <div class="field project-icon-field"><label>Ícone</label><input name="icon" maxlength="4" value="${esc(project?.icon || '✦')}" aria-label="Ícone do projeto" /></div>
+          <div class="field"><label>Nome do projeto</label><input name="title" required maxlength="70" value="${esc(project?.title || '')}" placeholder="Ex.: Empresa, Viagem, Russo…" /></div>
+          <div class="field full"><label>Descrição</label><textarea name="description" maxlength="140" placeholder="O objetivo deste projeto">${esc(project?.description || '')}</textarea></div>
+        </div>
+        <div class="modal-actions">
+          ${project ? '<button class="danger-button" id="deleteProjectBtn" type="button">Excluir</button>' : ''}
+          <button class="soft-button modal-close" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Salvar projeto</button>
+        </div>
+      </form>
+    `, 'project-modal');
+    $('#projectForm').onsubmit = (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const result = upsertProject(data, project?.id || null);
+      if (!result) return;
+      closeModal();
+      toast(project ? 'Projeto atualizado.' : 'Projeto criado. Agora adicione as tarefas dele.');
+    };
+    if (project) {
+      $('#deleteProjectBtn').onclick = () => {
+        const detail = taskCount ? ` As ${taskCount} tarefa${taskCount === 1 ? '' : 's'} serão movidas para outro projeto.` : '';
+        if (!confirm(`Excluir “${project.title}”?${detail}`)) return;
+        if (deleteProject(project.id)) closeModal();
+      };
+    }
+  }
+
+  function taskModal(taskId = null, presetDate = null, presetProjectId = null) {
     const task = state.tasks.find((item) => item.id === taskId);
     const date = presetDate || task?.date || state.selectedDate || localISO();
     const repeat = task?.repeat || normalizeRepeat(task || {});
     const repeatPreset = repeatPresetFor(task);
-    const modalProjectId = taskProjectIds.has(task?.projectId)
+    const projects = activeProjects();
+    const modalProjectId = projectExists(task?.projectId, projects)
       ? task.projectId
-      : state.view === 'upcoming' && taskProjectIds.has(state.selectedProject) ? state.selectedProject : 'routine';
-    const advancedOpen = Boolean(modalProjectId !== 'routine' || task?.goalId || task?.notes || repeatPreset === 'custom' || repeat?.mode === 'completed' || repeat?.endDate);
+      : projectExists(presetProjectId, projects)
+        ? presetProjectId
+        : state.view === 'upcoming' && projectExists(state.selectedProject, projects) ? state.selectedProject : projects[0].id;
+    const advancedOpen = Boolean(modalProjectId !== projects[0].id || task?.goalId || task?.notes || repeatPreset === 'custom' || repeat?.mode === 'completed' || repeat?.endDate);
     openModal(`
       <div class="modal-head">
         <div><h2>${task ? 'Editar tarefa' : 'Nova tarefa'}</h2><p>Tudo é salvo automaticamente quando você confirma.</p></div>
@@ -1335,7 +1510,7 @@
             <summary><span>Mais opções</span><small>duração, projeto, repetição avançada, meta e nota</small></summary>
             <div class="task-advanced-content">
               <div class="field"><label>Duração</label><div class="duration-input"><input name="duration" type="number" min="5" step="5" inputmode="numeric" value="${esc(task?.duration || state.settings.defaultDuration)}" /><span>min</span></div></div>
-              <div class="field"><label>Projeto</label><select name="projectId">${taskProjects.map((project) => `<option value="${project.id}" ${modalProjectId === project.id ? 'selected' : ''}>${esc(project.title)}</option>`).join('')}</select></div>
+              <div class="field"><label>Projeto</label><select name="projectId">${projects.map((project) => `<option value="${project.id}" ${modalProjectId === project.id ? 'selected' : ''}>${esc(project.title)}</option>`).join('')}</select></div>
               <div class="repeat-editor" id="repeatAdvanced" ${repeatPreset === 'none' ? 'hidden' : ''}>
                 <div class="repeat-grid">
                   <div class="field"><label>Repetir pela</label><select name="repeatMode">
@@ -2232,11 +2407,13 @@
     }
     const actionButton = event.target.closest('[data-action]');
     if (!actionButton) return;
-    const { action, id, date } = actionButton.dataset;
+    const { action, id, date, projectId } = actionButton.dataset;
     const actions = {
-      addTask: () => taskModal(null, state.selectedDate),
+      addTask: () => taskModal(null, date || (state.view === 'upcoming' && state.plannerDate ? state.plannerDate : state.selectedDate), projectId || (state.view === 'upcoming' ? state.selectedProject : null)),
+      addProject: () => projectModal(),
       addGoal: () => goalModal(),
       editTask: () => taskModal(id),
+      editProject: () => projectModal(id),
       editGoal: () => goalModal(id),
       toggleTask: () => animatedToggleTask(actionButton, id, date || state.selectedDate),
       previousDay: () => selectCalendarDate(addDays(state.selectedDate, -1), 'backward'),
@@ -2244,20 +2421,29 @@
       todayNow: () => selectCalendarDate(localISO(), state.selectedDate > localISO() ? 'backward' : 'forward'),
       selectDate: () => selectCalendarDate(date, date >= state.selectedDate ? 'forward' : 'backward'),
       selectUpcomingDate: () => selectCalendarDate(date, 'forward'),
-      selectPlannerDate: () => selectCalendarDate(date, date >= state.selectedDate ? 'forward' : 'backward'),
+      selectPlannerDate: () => selectPlannerDate(date, date >= (state.plannerDate || state.selectedDate) ? 'forward' : 'backward'),
+      clearPlannerDate: () => {
+        state.plannerDate = '';
+        save();
+        render();
+        haptic('select');
+      },
       previousPlannerMonth: () => {
         state.plannerMonth = addMonths(state.plannerMonth, -1).slice(0, 7) + '-01';
+        state.plannerDate = '';
         save();
         render({ quiet: true });
       },
       nextPlannerMonth: () => {
         state.plannerMonth = addMonths(state.plannerMonth, 1).slice(0, 7) + '-01';
+        state.plannerDate = '';
         save();
         render({ quiet: true });
       },
       selectProject: () => {
-        if (!taskProjectIds.has(id)) return;
+        if (!projectExists(id)) return;
         state.selectedProject = id;
+        state.plannerDate = '';
         save();
         render({ quiet: true });
         haptic('select');
@@ -2276,7 +2462,11 @@
 
   $('#commandBtn').onclick = commandModal;
   $('#settingsBtn').onclick = settingsModal;
-  $('#quickAdd').onclick = () => taskModal(null, state.view === 'today' ? state.selectedDate : localISO());
+  $('#quickAdd').onclick = () => taskModal(
+    null,
+    state.view === 'today' ? state.selectedDate : state.plannerDate || localISO(),
+    state.view === 'upcoming' ? state.selectedProject : null
+  );
 
   window.addEventListener('storage', (event) => {
     if (event.key !== STORAGE_KEY || !event.newValue) return;
@@ -2309,10 +2499,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '19');
+      freshUrl.searchParams.set('build', '20');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=19').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=20').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
@@ -2322,24 +2512,30 @@
     goalProgress,
     toggleTask,
     upsertTask,
+    upsertProject,
+    deleteProject,
     upsertGoal,
     executeCommand,
     isTaskOnDate,
     recurrenceLabel,
     nextPendingTaskDate,
     projectForTask,
+    setView,
+    selectPlannerDate,
     syncSystemDay,
     applyCloudState(input) {
       const currentView = state.view;
       const currentDate = state.selectedDate;
       const currentProject = state.selectedProject;
       const currentPlannerMonth = state.plannerMonth;
+      const currentPlannerDate = state.plannerDate;
       const notificationSetting = state.settings.notificationsEnabled;
       const incoming = sanitizeState(input);
       incoming.view = currentView;
       incoming.selectedDate = currentDate;
-      incoming.selectedProject = currentProject;
+      incoming.selectedProject = projectExists(currentProject, incoming.projects) ? currentProject : incoming.projects[0].id;
       incoming.plannerMonth = currentPlannerMonth;
+      incoming.plannerDate = currentPlannerDate;
       incoming.lastSystemDate = localISO();
       incoming.settings.notificationsEnabled = notificationSetting;
       state = incoming;
