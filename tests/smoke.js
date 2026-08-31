@@ -38,11 +38,19 @@ class Element {
   }
   querySelector(selector) {
     if (this.id === 'syncStatus' && selector === 'span') return elements.statusCopy;
+    if (this.id === 'canvasDiagnosticController' && selector.startsWith('[data-canvas-diagnostic-')) {
+      this.diagnosticControls ||= new Map();
+      if (!this.diagnosticControls.has(selector)) this.diagnosticControls.set(selector, new Element(selector));
+      return this.diagnosticControls.get(selector);
+    }
     return null;
   }
   querySelectorAll() { return []; }
-  append(child) { this.children.push(child); }
-  remove() {}
+  append(child) {
+    this.children.push(child);
+    if (child.id) selectors[`#${child.id}`] = child;
+  }
+  remove() { if (this.id) delete selectors[`#${this.id}`]; }
   focus() {}
   addEventListener() {}
   setAttribute(key, value) { this[key] = String(value); }
@@ -321,6 +329,16 @@ assert(elements.viewRoot.innerHTML.includes('planner-day-panel'), 'selected-day 
 assert(!elements.viewRoot.innerHTML.includes('class="project-browser"'), 'project list should yield to the selected-day agenda');
 api.setView('today');
 
+api.startCanvasDiagnostic();
+assert.strictEqual(elements.root.dataset.canvasDiagnostic, '0', 'canvas diagnostic must start with the complete app');
+assert(selectors['#canvasDiagnosticController']?.innerHTML.includes('App completo'), 'canvas diagnostic controller did not render');
+api.setCanvasDiagnosticStage(6);
+assert.strictEqual(elements.root.dataset.canvasDiagnostic, '6', 'canvas diagnostic did not reach the root-only stage');
+assert(selectors['#canvasDiagnosticController']?.innerHTML.includes('Somente o canvas verde'), 'root-only diagnostic label missing');
+api.stopCanvasDiagnostic();
+assert.strictEqual(elements.root.dataset.canvasDiagnostic, undefined, 'canvas diagnostic did not restore the normal app');
+assert.strictEqual(selectors['#canvasDiagnosticController'], undefined, 'canvas diagnostic controller was not removed');
+
 let edgePullPrevented = false;
 const touchTarget = { closest: () => null };
 documentListeners.get('touchstart')[0]({ touches: [{ clientX: 100, clientY: 100 }] });
@@ -404,8 +422,8 @@ assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mo
 assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
 assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
-assert(indexSource.includes('styles.css?v=24') && indexSource.includes('app.js?v=24'), 'v24 bottom-edge stacking fix must bypass the old PWA cache');
-assert(swSource.includes("objetivos-spatial-v24"), 'v24 service-worker cache missing');
+assert(indexSource.includes('styles.css?v=25') && indexSource.includes('app.js?v=25'), 'v25 canvas diagnostic must bypass the old PWA cache');
+assert(swSource.includes("objetivos-spatial-v25"), 'v25 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
@@ -442,7 +460,16 @@ assert(stylesSource.includes('.project-icon-option.selected{'), 'selected projec
 assert(!stylesSource.includes('@media (display-mode:standalone) and (max-width:760px)'), 'standalone PWA must not paint a separate lower band');
 assert(!stylesSource.includes('.app-shell::after{') && !stylesSource.includes('body::after{'), 'no bottom overlay may cover or dim the approved navigation');
 assert(appSource.includes("root.style.setProperty('--system-edge', systemEdgeColor)"), 'custom themes must update the PWA system edge color');
-assert(indexSource.includes('styles.css?v=24') && indexSource.includes('app.js?v=24'), 'v24 asset cache keys missing');
+assert(appSource.includes('id="canvasDiagnosticBtn"'), 'canvas diagnostic entry is missing from settings');
+assert(appSource.includes("title: 'Somente o canvas verde'"), 'canvas-only diagnostic stage missing');
+assert(appSource.includes('startCanvasDiagnostic') && appSource.includes('setCanvasDiagnosticStage') && appSource.includes('stopCanvasDiagnostic'), 'canvas diagnostic controls missing');
+assert(stylesSource.includes('html[data-canvas-diagnostic="1"] .quick-add'), 'diagnostic must remove the quick-add button first');
+assert(stylesSource.includes('html[data-canvas-diagnostic="2"] .bottom-dock'), 'diagnostic must remove the dock independently');
+assert(stylesSource.includes('html[data-canvas-diagnostic="3"] .workspace'), 'diagnostic must remove the workspace independently');
+assert(stylesSource.includes('html[data-canvas-diagnostic="4"] .topbar'), 'diagnostic must remove the topbar independently');
+assert(stylesSource.includes('html[data-canvas-diagnostic="5"] .environment'), 'diagnostic must remove the environment independently');
+assert(stylesSource.includes('html[data-canvas-diagnostic="6"]{') && stylesSource.includes('background:#20ff63!important'), 'final diagnostic must expose only a vivid root canvas');
+assert(indexSource.includes('styles.css?v=25') && indexSource.includes('app.js?v=25'), 'v25 asset cache keys missing');
 
 console.log(JSON.stringify({
   ok: true,
