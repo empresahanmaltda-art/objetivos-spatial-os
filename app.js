@@ -2554,7 +2554,7 @@
       freshUrl.searchParams.set('build', '20');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=23').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=24').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
