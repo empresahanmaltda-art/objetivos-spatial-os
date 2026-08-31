@@ -200,7 +200,7 @@ const api = window.__OBJETIVOS__;
 assert(api, 'public test API missing');
 let state = api.getState();
 
-assert.strictEqual(state.version, 4);
+assert.strictEqual(state.version, 5);
 assert.strictEqual(state.settings.theme, 'spatial');
 assert.strictEqual(state.settings.customBackground, '#302c28');
 assert.strictEqual(state.settings.customGlass, '#48423b');
@@ -215,6 +215,8 @@ assert.deepStrictEqual(state.settings.defaultReminders, [30, 0]);
 assert.strictEqual(state.settings.routineVersion, 3);
 assert.strictEqual(state.selectedProject, 'routine');
 assert(/^\d{4}-\d{2}-01$/.test(state.plannerMonth), 'planner month must be normalized');
+assert.strictEqual(state.plannerDate, '');
+assert.deepStrictEqual(state.projects.map((project) => project.title), ['Rotina Milionária', 'Projeto GYM — Greko Romano']);
 assert.strictEqual(state.tasks.filter((task) => task.routine).length, 26);
 assert.strictEqual(state.tasks.filter((task) => task.projectId === 'gym').length, 11);
 assert.strictEqual(state.tasks.filter((task) => task.projectId === 'routine').length, 15);
@@ -297,6 +299,28 @@ assert(api.tasksForDate(tomorrow, { includeCompleted: false }).some((task) => ta
 assert.strictEqual(elements.viewRoot.dataset.update, 'quiet', 'completion must not replay the full view animation');
 assert.strictEqual(elements.bottomDock.innerHTML, navBeforeCompletion, 'completion must not rebuild the bottom dock');
 
+const newProject = api.upsertProject({ title: 'Empresa OS', description: 'Construção da empresa.', icon: '◆' });
+assert(newProject, 'dynamic project was not created');
+state = api.getState();
+assert(state.projects.some((project) => project.id === newProject.id && project.title === 'Empresa OS'));
+const projectTask = api.upsertTask({ title: 'Planejar lançamento', date: today, time: '16:00', duration: 45, projectId: newProject.id });
+assert.strictEqual(projectTask.projectId, newProject.id, 'task was not created inside the selected project');
+assert(api.deleteProject(newProject.id), 'dynamic project was not deleted');
+state = api.getState();
+assert(!state.projects.some((project) => project.id === newProject.id));
+assert.notStrictEqual(state.tasks.find((task) => task.id === projectTask.id).projectId, newProject.id, 'tasks from a deleted project were not reassigned');
+
+api.setView('upcoming');
+assert.strictEqual(api.getState().view, 'upcoming');
+assert(elements.viewRoot.innerHTML.includes('Meus projetos'), 'projects browser was not rendered');
+assert(elements.viewRoot.innerHTML.includes('data-action="addTask" data-project-id="routine"'), 'tasks cannot be created inside the selected project');
+api.selectPlannerDate(today);
+assert.strictEqual(api.getState().view, 'upcoming', 'calendar selection must stay inside Projects');
+assert.strictEqual(api.getState().plannerDate, today);
+assert(elements.viewRoot.innerHTML.includes('planner-day-panel'), 'selected-day tasks were not rendered below the calendar');
+assert(!elements.viewRoot.innerHTML.includes('class="project-browser"'), 'project list should yield to the selected-day agenda');
+api.setView('today');
+
 let edgePullPrevented = false;
 const touchTarget = { closest: () => null };
 documentListeners.get('touchstart')[0]({ touches: [{ clientX: 100, clientY: 100 }] });
@@ -367,12 +391,21 @@ assert(stylesSource.includes('.task-modal .native-picker-control{height:32px!imp
 assert(elements.bottomDock.innerHTML.includes('Projetos'), 'project navigation label missing');
 assert(appSource.includes("'Rotina Milionária'"), 'routine project missing');
 assert(appSource.includes("'Projeto GYM — Greko Romano'"), 'gym project missing');
+assert(appSource.includes('function projectModal('), 'project creation and editing modal missing');
+assert(appSource.includes('function upsertProject('), 'dynamic project storage missing');
+assert(appSource.includes('data-action="addProject"'), 'new-project controls missing');
+assert(appSource.includes('data-project-id="${selectedProject.id}"'), 'selected-project task creation control missing');
 assert(appSource.includes('function plannerCalendar()'), 'compact project calendar missing');
+assert(appSource.includes('function selectPlannerDate('), 'planner date must be selected inside the projects view');
+assert(appSource.includes('state.plannerDate ? renderPlannerDay() : renderProjectBrowser()'), 'selected calendar day must render below the calendar');
 assert(!appSource.includes('Os próximos 14 dias'), 'legacy repeated upcoming-day view leaked');
-assert(stylesSource.includes('left:0;bottom:0;transform:none;'), 'mobile dock must cover the bottom safe area');
-assert(stylesSource.includes('padding:15px 12px calc(82px + env(safe-area-inset-bottom))'), 'dock clearance must stay inside the main panel');
-assert(indexSource.includes('styles.css?v=19') && indexSource.includes('app.js?v=19'), 'v19 assets must bypass the old PWA cache');
-assert(swSource.includes("objetivos-spatial-v19"), 'v19 service-worker cache missing');
+assert(stylesSource.includes('bottom:max(6px,env(safe-area-inset-bottom));'), 'approved floating mobile dock position changed');
+assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mobile dock width changed');
+assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
+assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
+assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
+assert(indexSource.includes('styles.css?v=20') && indexSource.includes('app.js?v=20'), 'v20 assets must bypass the old PWA cache');
+assert(swSource.includes("objetivos-spatial-v20"), 'v20 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
@@ -399,7 +432,7 @@ assert(elements.modalLayer.innerHTML.includes('task-cancel-button'), 'cancel but
 assert(elements.modalLayer.innerHTML.includes('task-save-button'), 'save button needs independent sizing');
 assert(elements.modalLayer.innerHTML.includes('30 min antes + na hora'), 'task form must show the fixed dual reminder schedule');
 assert(!appSource.includes("$('#viewRoot')?.focus()"), 'view changes must not leave a native focus ring');
-assert(indexSource.includes('styles.css?v=19'), 'v19 stylesheet cache key missing');
+assert(indexSource.includes('styles.css?v=20'), 'v20 stylesheet cache key missing');
 
 console.log(JSON.stringify({
   ok: true,
