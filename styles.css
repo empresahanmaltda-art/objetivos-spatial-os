@@ -696,7 +696,6 @@ html[data-motion="off"] *,html[data-motion="off"] *::before,html[data-motion="of
 
 @media(max-width:760px){
   .modal input:not([type="range"]):not([type="color"]):not([type="checkbox"]):not([type="radio"]),.modal select,.modal textarea,.command-input{font-size:16px!important;touch-action:manipulation}
-  body{background:linear-gradient(165deg,var(--bg-a) 0%,var(--bg-b) 38%,var(--bg-c) 100%)}
   .auth-gate{padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(165deg,var(--bg-a) 0%,var(--bg-b) 40%,var(--bg-c) 100%)}
   .auth-stage{min-height:min(650px,calc(100dvh - 24px));grid-template-columns:1fr;border-radius:29px}
   .auth-entry{justify-content:flex-start;padding:28px 24px 23px;border-right:0}
