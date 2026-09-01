@@ -1374,7 +1374,7 @@
     const metrics = Fluency.skillMetrics(fluency);
     const curriculum = Fluency.curriculumProgress(fluency);
     const currentLesson = curriculum.current;
-    const lessonPreview = curriculum.lessons.slice(curriculum.currentIndex, curriculum.currentIndex + 4);
+    const lessonPreview = curriculum.focusLessons.slice(0, 4);
     const session = fluency.activeSession;
     const studiedToday = fluency.events.filter((event) => event.date === date).length;
     const completedThisWeek = fluency.sessions.filter((item) => Fluency.dayDiff(item.date, date) >= 0 && Fluency.dayDiff(item.date, date) <= 6).length;
@@ -1409,22 +1409,22 @@
         </div>
 
         ${currentLesson ? `<section class="fluency-section fluency-course-section">
-          <div class="fluency-section-head"><div><span>Trilha das suas aulas</span><strong>Do alfabeto ao que você estudou por último</strong></div><button class="chip-button" data-action="fluencyCurriculum" type="button">Ver 16 aulas</button></div>
+          <div class="fluency-section-head"><div><span>Memória das suas aulas</span><strong>Revisão acumulativa de tudo que você já estudou</strong></div><button class="chip-button" data-action="fluencyCurriculum" type="button">Ver 16 aulas</button></div>
           <div class="fluency-course-summary">
             <div class="fluency-course-number">${String(currentLesson.number).padStart(2, '0')}</div>
             <div class="fluency-course-copy">
-              <small>Agora · Aula ${currentLesson.number}</small>
+              <small>Lacuna prioritária · Aula ${currentLesson.number}</small>
               <strong>${esc(currentLesson.title)}</strong>
               <p>${esc(currentLesson.summary)}</p>
               <div class="fluency-course-track"><i style="width:${currentLesson.mastery}%"></i></div>
-              <span>${currentLesson.reviewed}/${currentLesson.itemCount} bases praticadas · ${currentLesson.mastery}% consolidado</span>
+              <span>${currentLesson.reviewed}/${currentLesson.itemCount} bases recuperadas · ${currentLesson.mastery}% consolidado</span>
             </div>
             <div class="fluency-course-total"><strong>${curriculum.overall}%</strong><span>curso consolidado</span></div>
           </div>
           <div class="fluency-lesson-preview">
             ${lessonPreview.map((lesson) => `<article class="${lesson.status}"><span>${String(lesson.number).padStart(2, '0')}</span><div><strong>${esc(lesson.title)}</strong><small>${lesson.status === 'current' ? 'Em calibração agora' : lesson.status === 'next' ? 'Próxima base' : lesson.mastery ? `${lesson.mastery}% consolidado` : 'Mapeada e aguardando'}</small></div><i>${lesson.mastery}%</i></article>`).join('')}
           </div>
-          <p class="fluency-course-note">As 16 aulas e 130 páginas foram mapeadas. O sistema libera poucas bases por vez e retorna nelas até virarem memória utilizável — sem fingir que conteúdo visto já está dominado.</p>
+          <p class="fluency-course-note">Você já estudou as 16 aulas. Agora o sistema mistura conteúdo recente e fundamentos, mede o que sobreviveu na memória e insiste apenas nas lacunas até você conseguir usar tudo sem consultar.</p>
         </section>` : ''}
 
         <section class="fluency-section">
@@ -3065,10 +3065,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '27');
+      freshUrl.searchParams.set('build', '28');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=27').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=28').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {

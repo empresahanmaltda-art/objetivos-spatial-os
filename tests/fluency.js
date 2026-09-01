@@ -60,9 +60,13 @@ assert.strictEqual(parsed.unresolved.length, 1, 'unresolved material must be pre
 assert(parsed.items.every((item) => item.sourceId === sourceId));
 
 const state = engine.defaultState();
-assert.strictEqual(state.items.length, 148, 'starter and full private-course curriculum must be available');
+assert.strictEqual(state.items.length, 140, 'the full private-course curriculum must be available without generic duplicate cards');
 assert.strictEqual(state.curriculumVersion, curriculum.VERSION);
 assert.strictEqual(engine.curriculumProgress(state).lessons.length, 16);
+assert.strictEqual(state.settings.newPerDay, 10, 'completed course material should be calibrated at an efficient daily pace');
+const calibration = engine.buildSession(state, { date: engine.localISO(), minutes: 75 });
+const sampledLessons = calibration.queue.map((entry) => state.items.find((item) => item.id === entry.itemId)?.lessonId);
+assert.deepStrictEqual([...new Set(sampledLessons)].slice(0, 4), ['l16', 'l14', 'l10', 'l07'], 'initial calibration must mix recent material with core foundations');
 const today = engine.localISO();
 state.items.forEach((item, index) => {
   item.scheduling.state = 'review';
@@ -110,6 +114,14 @@ assert.strictEqual(sanitized.settings.newPerDay, 30);
 assert.strictEqual(sanitized.items.length, parsed.items.length + curriculum.cards.length, 'existing accounts must receive the curriculum exactly once');
 const sanitizedTwice = engine.sanitizeState(sanitized);
 assert.strictEqual(sanitizedTwice.items.length, sanitized.items.length, 'curriculum migration must be idempotent');
+const upgradedLegacy = engine.sanitizeState({
+  settings: { newPerDay: 6 },
+  items: [{ ...engine.defaultState().items[0], id: 'starter-a1-legacy', sourceId: 'starter-russian-a1', lessonId: '', scheduling: { state: 'new' } }],
+  sources: [{ id: 'starter-russian-a1', title: 'Diagnóstico inicial A1', kind: 'starter' }],
+  curriculumVersion: 1
+});
+assert.strictEqual(upgradedLegacy.settings.newPerDay, 10);
+assert(upgradedLegacy.items.find((item) => item.id === 'starter-a1-legacy')?.suspended, 'untouched generic starter cards should leave the active queue');
 const preserved = engine.sanitizeSource({
   id: sourceId,
   title: 'Aula 01',

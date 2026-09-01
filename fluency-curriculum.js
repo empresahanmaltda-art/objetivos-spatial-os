@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 1;
+  const VERSION = 2;
   const COURSE_ID = 'ru-private-course-2026';
   const notionUrl = 'https://app.notion.com/p/Kauan-Hanma-3826df77134580348816f3e087f98c98';
 
