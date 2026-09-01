@@ -38,11 +38,6 @@ class Element {
   }
   querySelector(selector) {
     if (this.id === 'syncStatus' && selector === 'span') return elements.statusCopy;
-    if (this.id === 'canvasDiagnosticController' && selector.startsWith('[data-canvas-diagnostic-')) {
-      this.diagnosticControls ||= new Map();
-      if (!this.diagnosticControls.has(selector)) this.diagnosticControls.set(selector, new Element(selector));
-      return this.diagnosticControls.get(selector);
-    }
     return null;
   }
   querySelectorAll() { return []; }
@@ -113,7 +108,7 @@ store.set('objetivos-spatial-os-v2', JSON.stringify({
     { id: 'goal-usd-1m', title: 'US$ 1 milhão por mês', target: 1000000, current: 120000, unit: 'US$', deadline: '2027-12-31' },
     { id: 'custom-goal', title: 'Meta pessoal', target: 20, current: 7, unit: 'unid.', deadline: '2026-12-31' }
   ],
-  settings: {}
+  settings: { haptics: false, motion: false }
 }));
 
 const documentListeners = new Map();
@@ -181,7 +176,7 @@ const pngDimensions = (path) => {
   assert.strictEqual(file.subarray(1, 4).toString(), 'PNG', `${path} must be a PNG`);
   return [file.readUInt32BE(16), file.readUInt32BE(20)];
 };
-assert(appSource.includes('Continuar com Google'), 'Google sign-in control missing');
+assert(indexSource.includes('Continuar com Google'), 'Google sign-in control missing');
 assert(!appSource.includes('cloudMagicLink'), 'legacy magic-link form leaked');
 assert(indexSource.includes('assets/os-icon-v18-180.png'), 'new iOS home-screen icon missing');
 assert(indexSource.includes('<span class="brand-tile"><img src="assets/os-icon-v18-192.png"'), 'new in-app icon missing');
@@ -218,6 +213,8 @@ assert.strictEqual(state.settings.glassOpacity, 82);
 assert.strictEqual(state.settings.moduleOpacity, 84);
 assert.strictEqual(state.settings.glassBlur, 28);
 assert.deepStrictEqual(state.settings.savedThemes, []);
+assert.strictEqual(state.settings.haptics, true, 'haptic feedback must stay enabled');
+assert.strictEqual(state.settings.motion, true, 'Spatial motion must stay enabled');
 assert.strictEqual(state.settings.defaultReminder, 30);
 assert.deepStrictEqual(state.settings.defaultReminders, [30, 0]);
 assert.strictEqual(state.settings.routineVersion, 3);
@@ -329,16 +326,6 @@ assert(elements.viewRoot.innerHTML.includes('planner-day-panel'), 'selected-day 
 assert(!elements.viewRoot.innerHTML.includes('class="project-browser"'), 'project list should yield to the selected-day agenda');
 api.setView('today');
 
-api.startCanvasDiagnostic();
-assert.strictEqual(elements.root.dataset.canvasDiagnostic, '0', 'canvas diagnostic must start with the complete app');
-assert(selectors['#canvasDiagnosticController']?.innerHTML.includes('App completo'), 'canvas diagnostic controller did not render');
-api.setCanvasDiagnosticStage(6);
-assert.strictEqual(elements.root.dataset.canvasDiagnostic, '6', 'canvas diagnostic did not reach the root-only stage');
-assert(selectors['#canvasDiagnosticController']?.innerHTML.includes('Somente o canvas verde'), 'root-only diagnostic label missing');
-api.stopCanvasDiagnostic();
-assert.strictEqual(elements.root.dataset.canvasDiagnostic, undefined, 'canvas diagnostic did not restore the normal app');
-assert.strictEqual(selectors['#canvasDiagnosticController'], undefined, 'canvas diagnostic controller was not removed');
-
 let edgePullPrevented = false;
 const touchTarget = { closest: () => null };
 documentListeners.get('touchstart')[0]({ touches: [{ clientX: 100, clientY: 100 }] });
@@ -422,8 +409,8 @@ assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mo
 assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
 assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
-assert(indexSource.includes('styles.css?v=25') && indexSource.includes('app.js?v=25'), 'v25 canvas diagnostic must bypass the old PWA cache');
-assert(swSource.includes("objetivos-spatial-v25"), 'v25 service-worker cache missing');
+assert(indexSource.includes('styles.css?v=26') && indexSource.includes('app.js?v=26') && indexSource.includes('cloud-sync.js?v=26'), 'v26 asset cache keys missing');
+assert(swSource.includes("objetivos-spatial-v26"), 'v26 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
@@ -460,16 +447,15 @@ assert(stylesSource.includes('.project-icon-option.selected{'), 'selected projec
 assert(!stylesSource.includes('@media (display-mode:standalone) and (max-width:760px)'), 'standalone PWA must not paint a separate lower band');
 assert(!stylesSource.includes('.app-shell::after{') && !stylesSource.includes('body::after{'), 'no bottom overlay may cover or dim the approved navigation');
 assert(appSource.includes("root.style.setProperty('--system-edge', systemEdgeColor)"), 'custom themes must update the PWA system edge color');
-assert(appSource.includes('id="canvasDiagnosticBtn"'), 'canvas diagnostic entry is missing from settings');
-assert(appSource.includes("title: 'Somente o canvas verde'"), 'canvas-only diagnostic stage missing');
-assert(appSource.includes('startCanvasDiagnostic') && appSource.includes('setCanvasDiagnosticStage') && appSource.includes('stopCanvasDiagnostic'), 'canvas diagnostic controls missing');
-assert(stylesSource.includes('html[data-canvas-diagnostic="1"] .quick-add'), 'diagnostic must remove the quick-add button first');
-assert(stylesSource.includes('html[data-canvas-diagnostic="2"] .bottom-dock'), 'diagnostic must remove the dock independently');
-assert(stylesSource.includes('html[data-canvas-diagnostic="3"] .workspace'), 'diagnostic must remove the workspace independently');
-assert(stylesSource.includes('html[data-canvas-diagnostic="4"] .topbar'), 'diagnostic must remove the topbar independently');
-assert(stylesSource.includes('html[data-canvas-diagnostic="5"] .environment'), 'diagnostic must remove the environment independently');
-assert(stylesSource.includes('html[data-canvas-diagnostic="6"]{') && stylesSource.includes('background:#20ff63!important'), 'final diagnostic must expose only a vivid root canvas');
-assert(indexSource.includes('styles.css?v=25') && indexSource.includes('app.js?v=25'), 'v25 asset cache keys missing');
+[
+  'canvasDiagnosticBtn', 'Rotina Operação Moscou', 'motionToggle', 'hapticToggle',
+  'id="swipeLeft"', 'id="swipeRight"', 'Salvamento automático', 'cloudSettingRow', 'cloudAccountBtn'
+].forEach((hiddenSetting) => assert(!appSource.includes(hiddenSetting), `${hiddenSetting} must stay hidden from settings`));
+assert(!stylesSource.includes('canvas-diagnostic'), 'temporary canvas diagnostic styles leaked');
+assert(appSource.includes('<strong>Backup</strong>') && appSource.includes('id="exportBtn"') && appSource.includes('id="importBtn"'), 'backup controls must remain available');
+assert(appSource.includes('id="notificationToggle"') && appSource.includes('id="pushServerBtn"'), 'notification controls must remain available');
+assert(appSource.includes('settings.haptics = true') && appSource.includes('settings.motion = true'), 'hidden automatic behaviors must be enforced');
+assert(cloudSyncSource.includes('if (pushButton) {') && !cloudSyncSource.includes('if (!accountButton || !pushButton) return;'), 'push settings must bind without the hidden account row');
 
 console.log(JSON.stringify({
   ok: true,
