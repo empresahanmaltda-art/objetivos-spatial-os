@@ -15,6 +15,7 @@
     listening: 'listening',
     shadowing: 'speaking'
   };
+  const CURRICULUM_REVIEW_PRIORITY = ['l16', 'l14', 'l10', 'l07', 'l11', 'l06', 'l04', 'l02', 'l05', 'l08', 'l09', 'l12', 'l13', 'l15', 'l03', 'l01'];
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -178,7 +179,7 @@
   }
 
   function defaultState() {
-    const starter = starterItems();
+    const starter = Curriculum ? [] : starterItems();
     const courseItems = curriculumItems();
     const items = [...starter, ...courseItems];
     const courseSource = curriculumSource(courseItems.length);
@@ -196,14 +197,14 @@
         teacher: 'Nastinhary'
       },
       settings: {
-        newPerDay: 6,
+        newPerDay: 10,
         maxReviews: 30,
         backlogShare: .2,
         requestRetention: .9,
         autoplayAudio: true,
         acceptYoAsE: true
       },
-      sources: [{
+      sources: [...(!Curriculum ? [{
         id: 'starter-russian-a1',
         title: 'Diagnóstico inicial A1',
         kind: 'starter',
@@ -212,7 +213,7 @@
         unresolvedCount: 0,
         createdAt: Date.now(),
         note: 'Calibração curta antes de avançar pelo conteúdo das suas aulas.'
-      }, ...(courseSource ? [courseSource] : [])],
+      }] : []), ...(courseSource ? [courseSource] : [])],
       items,
       events: [],
       sessions: [],
@@ -305,6 +306,10 @@
     const storedCurriculumVersion = Math.max(0, Number(input.curriculumVersion) || 0);
     const currentCurriculumVersion = Curriculum?.VERSION || 0;
     if (currentCurriculumVersion > storedCurriculumVersion) {
+      const starterHasHistory = items.some((item) => item.sourceId === 'starter-russian-a1' && item.scheduling.reps > 0);
+      items = items.map((item) => item.sourceId === 'starter-russian-a1' && item.scheduling.reps === 0 ? { ...item, suspended: true } : item);
+      if (!starterHasHistory) sources = sources.filter((source) => source.id !== 'starter-russian-a1');
+      if (!input.settings || Number(input.settings.newPerDay) === 6) settings.newPerDay = 10;
       const itemIds = new Set(items.map((item) => item.id));
       const additions = curriculumItems().filter((item) => !itemIds.has(item.id));
       items = [...items, ...additions].slice(0, 5000);
@@ -357,7 +362,19 @@
   function buildSession(input, { date = localISO(), minutes = 75 } = {}) {
     const state = sanitizeState(input);
     const available = state.items.filter((item) => !item.suspended);
-    const newItems = available.filter((item) => item.scheduling.state === 'new').sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+    const curriculumRank = new Map(CURRICULUM_REVIEW_PRIORITY.map((lessonId, index) => [lessonId, index]));
+    const courseOrder = (item) => {
+      const lessonRank = curriculumRank.get(item.lessonId) ?? CURRICULUM_REVIEW_PRIORITY.length;
+      const positionInLesson = Math.max(0, Number(item.order) % 100 - 1);
+      return positionInLesson * CURRICULUM_REVIEW_PRIORITY.length + lessonRank;
+    };
+    const newItems = available.filter((item) => item.scheduling.state === 'new').sort((a, b) => {
+      const aCourse = Boolean(a.lessonId);
+      const bCourse = Boolean(b.lessonId);
+      if (aCourse && bCourse) return courseOrder(a) - courseOrder(b);
+      if (aCourse !== bCourse) return aCourse ? 1 : -1;
+      return b.createdAt - a.createdAt || a.order - b.order;
+    });
     const reviewItems = available.filter((item) => item.scheduling.state !== 'new' && item.scheduling.due <= date);
     const backlog = reviewItems.filter((item) => item.scheduling.due < date).sort((a, b) => a.scheduling.due.localeCompare(b.scheduling.due));
     const dueToday = reviewItems.filter((item) => item.scheduling.due === date).sort((a, b) => a.scheduling.difficulty - b.scheduling.difficulty);
@@ -538,14 +555,17 @@
       const reviewed = items.filter((item) => item.scheduling.reps > 0).length;
       return { ...lesson, itemCount: items.length, reviewed, mastery, status: 'mapped' };
     });
-    const firstUnmastered = lessons.findIndex((lesson) => lesson.mastery < 75);
-    const currentIndex = firstUnmastered === -1 ? lessons.length - 1 : firstUnmastered;
-    lessons.forEach((lesson, index) => {
-      lesson.status = lesson.mastery >= 75 ? 'mastered' : index === currentIndex ? 'current' : index === currentIndex + 1 ? 'next' : 'mapped';
+    const priorityRank = new Map(CURRICULUM_REVIEW_PRIORITY.map((lessonId, index) => [lessonId, index]));
+    const focusLessons = lessons.filter((lesson) => lesson.mastery < 75).sort((a, b) => a.mastery - b.mastery || (priorityRank.get(a.id) ?? 99) - (priorityRank.get(b.id) ?? 99));
+    const current = focusLessons[0] || lessons[lessons.length - 1];
+    const next = focusLessons[1] || null;
+    const currentIndex = lessons.findIndex((lesson) => lesson.id === current.id);
+    lessons.forEach((lesson) => {
+      lesson.status = lesson.mastery >= 75 ? 'mastered' : lesson.id === current.id ? 'current' : lesson.id === next?.id ? 'next' : 'mapped';
     });
     const mastered = lessons.filter((lesson) => lesson.mastery >= 75).length;
     const overall = Math.round(lessons.reduce((sum, lesson) => sum + lesson.mastery, 0) / lessons.length);
-    return { lessons, current: lessons[currentIndex] || lessons[lessons.length - 1], currentIndex, overall, mastered };
+    return { lessons, current, currentIndex, focusLessons, overall, mastered };
   }
 
   globalThis.FluencyEngine = Object.freeze({

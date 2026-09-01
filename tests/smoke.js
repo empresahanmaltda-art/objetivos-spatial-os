@@ -235,9 +235,8 @@ assert.strictEqual(state.settings.routineVersion, 3);
 assert.strictEqual(state.fluency.profile.targetLanguage, 'ru');
 assert.strictEqual(state.fluency.profile.overallLevel, 'A1');
 assert.strictEqual(state.fluency.profile.dailyMinutes, 75);
-assert.strictEqual(state.fluency.items.length, 148);
-assert.strictEqual(state.fluency.sources[0].id, 'starter-russian-a1');
-assert.strictEqual(state.fluency.sources[1].id, 'ru-private-course-2026');
+assert.strictEqual(state.fluency.items.length, 140);
+assert.strictEqual(state.fluency.sources[0].id, 'ru-private-course-2026');
 assert(fluencyCurriculumSource.includes('pageCount: 130'), 'all 130 inspected Canva pages must be represented');
 assert.strictEqual(context.FluencyEngine.curriculumProgress(state.fluency).lessons.length, 16);
 assert(fluencySource.includes("const VALID_MODES = ['recognition', 'recall', 'cloze', 'listening', 'shadowing']"), 'all five acquisition modes are required');
@@ -459,6 +458,8 @@ assert(swSource.includes("objetivos-spatial-v28"), 'v28 service-worker cache mis
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
+assert(appSource.includes("freshUrl.searchParams.set('build', '28')"), 'PWA refresh must point to build 28');
+assert(appSource.includes("serviceWorker.register('./sw.js?v=28')"), 'PWA must register the build 28 service worker');
 assert(swSource.includes("fetch(event.request, { cache: 'no-store' })"), 'PWA navigation must bypass stale iOS caches');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
 ['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {
