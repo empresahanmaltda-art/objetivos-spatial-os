@@ -1,6 +1,6 @@
 # OBJETIVOS — Spatial OS
 
-Aplicativo pessoal focado em duas coisas: tarefas e metas com prazo. Não há dados financeiros demonstrativos, Spotify, áreas paralelas ou dependências de build.
+Aplicativo pessoal de execução diária: tarefas, projetos, metas com prazo e aquisição adaptativa de idiomas. Não há dados financeiros demonstrativos, Spotify ou dependências de build no frontend.
 
 ## Recursos
 
@@ -22,6 +22,14 @@ Aplicativo pessoal focado em duas coisas: tarefas e metas com prazo. Não há da
 - Layout responsivo com área segura para iPhone.
 - PWA com cache offline.
 - Lembretes locais e Web Push disparado pelo servidor mesmo com o PWA fechado.
+- Aba Fluency com perfil CEFR por habilidade, fila adaptativa e histórico de sessões.
+- Cinco formas de recuperação: reconhecimento, produção escrita, lacuna, ditado e shadowing.
+- Estado de memória por cartão com dificuldade, estabilidade, recuperabilidade e retenção-alvo de 90%.
+- Proteção contra acúmulo: no máximo 20% da sessão vem do backlog atrasado.
+- Comparação Unicode tolerante a pequenos erros e à diferença entre `е` e `ё`.
+- Voz russa nativa do aparelho e explicações de gramática, estrutura, pronúncia e associação mental.
+- Importação preservada de texto e PDF; materiais privados ficam isolados por usuário.
+- Geração por IA autenticada no servidor com Responses API e Structured Outputs estrito.
 
 ## Executar localmente
 
@@ -36,3 +44,15 @@ O frontend usa somente a URL e a chave publicável do Supabase em `cloud-config.
 O schema está em `supabase/migrations`, a função de notificações em `supabase/functions/push-due` e o agendamento em `supabase/setup-cron.example.sql`. Depois do deploy, abra Configurações no app, use “Continuar com Google” em cada aparelho e ative os alertas separadamente em cada dispositivo.
 
 No iPhone, notificações com o app fechado exigem instalar o site na Tela de Início e abrir essa versão instalada antes de ativar os alertas.
+
+## Fluency inteligente
+
+O motor local está em `fluency-engine.js` e continua funcionando offline. O enriquecimento de materiais fica em `supabase/functions/fluency-generate`: a chave da OpenAI nunca entra no PWA. A função autentica o usuário, baixa somente arquivos do caminho privado dele, trata o conteúdo como dado não confiável e devolve até 30 cartões em JSON estrito.
+
+Para ativar o pipeline em um projeto Supabase já vinculado:
+
+    supabase db push
+    supabase secrets set OPENAI_API_KEY=... OPENAI_FLUENCY_MODEL=gpt-5.6-terra
+    supabase functions deploy fluency-generate
+
+O bucket `fluency-materials` é privado e criado pela migration `202609010001_fluency_materials.sql`. Se a IA estiver temporariamente indisponível, o texto original e as linhas ainda não resolvidas permanecem no estado sincronizado; o material pode ser processado depois sem perda.

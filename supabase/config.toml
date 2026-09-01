@@ -1,3 +1,5 @@
 [functions.push-due]
 verify_jwt = false
 
+[functions.fluency-generate]
+verify_jwt = true

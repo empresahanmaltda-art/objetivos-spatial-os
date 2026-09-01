@@ -14,6 +14,8 @@
   const INSTANCE_ID = uid('tab');
   const esc = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char]);
   const normalize = (value = '') => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const Fluency = globalThis.FluencyEngine;
+  if (!Fluency) throw new Error('Fluency Engine não foi carregado.');
   let state = null;
 
   function localISO(date = new Date()) {
@@ -342,7 +344,7 @@
     settings.routineVersion = ROUTINE_VERSION;
     const projects = defaultProjects();
     return {
-      version: 5,
+      version: 6,
       view: 'today',
       selectedDate: localISO(),
       selectedProject: projects[0].id,
@@ -352,6 +354,7 @@
       projects,
       tasks: seedRoutine(),
       goals: seedGoals(),
+      fluency: Fluency.defaultState(),
       settings,
       updatedAt: new Date().toISOString(),
       revision: 0
@@ -492,8 +495,8 @@
     const next = {
       ...base,
       ...input,
-      version: 5,
-      view: ['today', 'upcoming', 'goals'].includes(input.view) ? input.view : 'today',
+      version: 6,
+      view: ['today', 'upcoming', 'goals', 'fluency'].includes(input.view) ? input.view : 'today',
       selectedDate: /^\d{4}-\d{2}-\d{2}$/.test(input.selectedDate || '') ? input.selectedDate : localISO(),
       selectedProject: projectExists(input.selectedProject, projects) ? input.selectedProject : projects[0].id,
       plannerMonth: /^\d{4}-\d{2}-01$/.test(input.plannerMonth || '') ? input.plannerMonth : localISO().slice(0, 7) + '-01',
@@ -502,6 +505,7 @@
       projects,
       tasks: Array.isArray(input.tasks) ? input.tasks.map((task) => sanitizeTask(task, projects)) : [],
       goals,
+      fluency: Fluency.sanitizeState(input.fluency),
       settings
     };
     if (next.view === 'today' && (!storedSystemDate || storedSystemDate !== localISO())) next.selectedDate = localISO();
@@ -951,7 +955,8 @@
   const navItems = [
     { id: 'today', icon: '◷', label: 'Hoje' },
     { id: 'upcoming', icon: '▦', label: 'Projetos' },
-    { id: 'goals', icon: '◎', label: 'Metas' }
+    { id: 'goals', icon: '◎', label: 'Metas' },
+    { id: 'fluency', icon: 'Я', label: 'Fluency' }
   ];
 
   function setView(view) {
@@ -1314,16 +1319,324 @@
     `;
   }
 
+  const fluencySkillLabels = {
+    reading: 'Leitura',
+    listening: 'Escuta',
+    speaking: 'Fala',
+    writing: 'Escrita',
+    interaction: 'Interação'
+  };
+
+  const fluencyModeLabels = {
+    recognition: 'Reconhecimento',
+    recall: 'Produção',
+    cloze: 'Lacuna',
+    listening: 'Ditado',
+    shadowing: 'Pronúncia'
+  };
+
+  function fluencyStudyMinutes(date = localISO()) {
+    const russianTask = tasksForDate(date).find((task) => normalize(task.title).includes('russo pm'));
+    return Math.max(15, Number(russianTask?.duration) || Number(state.fluency.profile.dailyMinutes) || 75);
+  }
+
+  function fluencyDayContext(date = localISO()) {
+    const lesson = tasksForDate(date).find((task) => normalize(task.title) === 'aula');
+    if (!lesson) return 'Revisão, aquisição e produção guiada';
+    return `Dia de aula · ${lesson.time} · preparação + consolidação`;
+  }
+
+  function currentFluencyEntry() {
+    const session = state.fluency.activeSession;
+    if (!session || session.index >= session.queue.length) return null;
+    const entry = session.queue[session.index];
+    const item = state.fluency.items.find((candidate) => candidate.id === entry.itemId);
+    return item ? { session, entry, item } : null;
+  }
+
+  function fluencySkillCard(skill, metric) {
+    const score = clamp(Number(metric.score) || 0, 0, 100);
+    return `
+      <article class="fluency-skill-card">
+        <div><span>${esc(fluencySkillLabels[skill])}</span><strong>${esc(metric.level)}</strong></div>
+        <div class="fluency-skill-track"><i style="width:${score}%"></i></div>
+        <small>${metric.reviews ? `${score}% de precisão recente · ${metric.reviews} revisões` : 'Aguardando calibração'}</small>
+      </article>
+    `;
+  }
+
+  function renderFluencyDashboard() {
+    const fluency = state.fluency;
+    const date = localISO();
+    const minutes = fluencyStudyMinutes(date);
+    const summary = Fluency.dueSummary(fluency, date);
+    const plan = Fluency.buildSession(fluency, { date, minutes });
+    const metrics = Fluency.skillMetrics(fluency);
+    const session = fluency.activeSession;
+    const studiedToday = fluency.events.filter((event) => event.date === date).length;
+    const completedThisWeek = fluency.sessions.filter((item) => Fluency.dayDiff(item.date, date) >= 0 && Fluency.dayDiff(item.date, date) <= 6).length;
+    return `
+      <div class="view-enter fluency-view">
+        ${viewHead('Aquisição de idioma', 'Fluency', `${fluency.profile.targetLanguageName} · ${fluency.profile.overallLevel} · ${fluencyDayContext(date)}`, `
+          <button class="soft-button fluency-level-button" data-action="fluencyProfile" type="button">${esc(fluency.profile.overallLevel)} <span>Perfil</span></button>
+          <button class="primary-button" data-action="addFluencySource" type="button">+ <span>Material</span></button>
+        `)}
+
+        <section class="fluency-hero">
+          <div class="fluency-hero-copy">
+            <span class="fluency-kicker">Sessão de hoje</span>
+            <h2>${session?.paused ? 'Sua sessão está pausada' : 'Treino adaptado ao que você precisa agora'}</h2>
+            <p>${session?.paused ? `Você parou no cartão ${Math.min(session.index + 1, session.queue.length)} de ${session.queue.length}.` : `O motor escolheu ${plan.queue.length} recuperações para caber nos ${minutes} minutos da sua rotina, sem despejar todo o backlog de uma vez.`}</p>
+            <div class="fluency-hero-actions">
+              <button class="primary-button fluency-start" data-action="${session?.paused ? 'resumeFluency' : 'startFluency'}" type="button">${session?.paused ? 'Continuar sessão' : 'Começar treino'}</button>
+              <button class="soft-button" data-action="speakFluencySample" type="button">▶ Testar voz russa</button>
+            </div>
+          </div>
+          <div class="fluency-orbit" aria-label="${plan.queue.length} cartões planejados">
+            <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="42"></circle><circle class="active" cx="50" cy="50" r="42" style="stroke-dashoffset:${264 - Math.min(264, plan.queue.length / Math.max(10, fluency.settings.maxReviews) * 264)}"></circle></svg>
+            <strong>${plan.queue.length}</strong><span>cartões</span>
+          </div>
+        </section>
+
+        <div class="fluency-stat-grid">
+          <article><span>Para revisar</span><strong>${summary.dueCount}</strong><small>${summary.backlog ? `${summary.backlog} atrasadas, limite protegido em 20%` : 'fila em dia'}</small></article>
+          <article><span>Novos disponíveis</span><strong>${summary.newCount}</strong><small>máximo ${fluency.settings.newPerDay} por sessão</small></article>
+          <article><span>Sequência</span><strong>${fluency.streak.current}d</strong><small>${completedThisWeek}/${fluency.profile.weeklyGoal} sessões na semana</small></article>
+          <article><span>Hoje</span><strong>${studiedToday}</strong><small>recuperações concluídas</small></article>
+        </div>
+
+        <section class="fluency-section">
+          <div class="fluency-section-head"><div><span>Mapa de fluência</span><strong>Cada habilidade evolui separadamente</strong></div><small>${summary.mature}/${summary.total} cartões maduros</small></div>
+          <div class="fluency-skill-grid">${Object.entries(metrics).map(([skill, metric]) => fluencySkillCard(skill, metric)).join('')}</div>
+        </section>
+
+        <section class="fluency-section" id="fluencySources">
+          <div class="fluency-section-head"><div><span>Seus materiais</span><strong>Aulas, PDFs, textos e anotações</strong></div><button class="chip-button" data-action="addFluencySource" type="button">Adicionar</button></div>
+          <div class="fluency-source-list">
+            ${fluency.sources.map((source) => `
+              <article class="fluency-source-card">
+                <div class="fluency-source-icon">${source.kind === 'notion' ? 'N' : source.kind === 'pdf' ? 'PDF' : source.kind === 'starter' ? 'A1' : 'TXT'}</div>
+                <div><strong>${esc(source.title)}</strong><span>${source.itemCount} cartões${source.unresolvedCount ? ` · ${source.unresolvedCount} aguardando IA` : ''}</span><small>${esc(source.note || (source.status === 'ready' ? 'Pronto para estudar' : 'Aguardando processamento'))}</small></div>
+                <div class="fluency-source-actions">
+                  <i class="source-status ${source.status}"></i>
+                  ${source.status === 'needs-ai' && (source.rawText || source.storagePath) ? `<button class="chip-button" data-action="processFluencySource" data-id="${esc(source.id)}" type="button">Processar</button>` : ''}
+                </div>
+              </article>
+            `).join('')}
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderFluencySession() {
+    const fluency = state.fluency;
+    const session = fluency.activeSession;
+    if (!session) return renderFluencyDashboard();
+    if (session.completedAt || session.index >= session.queue.length) {
+      const total = session.ratings.length;
+      const accuracy = total ? Math.round((session.correct + session.minor * .65) / total * 100) : 0;
+      return `
+        <div class="view-enter fluency-session-view">
+          ${viewHead('Sessão concluída', 'Boa. O cérebro trabalhou.', `${total} recuperações · ${accuracy}% de precisão`, '')}
+          <section class="fluency-complete-card">
+            <div class="fluency-complete-orbit">✓</div>
+            <h2>Conteúdo consolidado</h2>
+            <p>O próximo intervalo de cada item foi recalculado pela dificuldade, pelo histórico e pela qualidade desta resposta.</p>
+            <div class="fluency-complete-stats"><span><strong>${session.correct}</strong> firmes</span><span><strong>${session.minor}</strong> quase</span><span><strong>${session.missed}</strong> recuperar</span></div>
+            <button class="primary-button" data-action="finishFluency" type="button">Voltar ao painel</button>
+          </section>
+        </div>
+      `;
+    }
+    const current = currentFluencyEntry();
+    if (!current) return renderFluencyDashboard();
+    const { entry, item } = current;
+    const prompt = Fluency.promptFor(item, entry.mode);
+    const progress = Math.round(session.index / Math.max(session.queue.length, 1) * 100);
+    const expected = entry.mode === 'cloze' ? item.focusWord : item.targetPhrase;
+    const comparison = session.comparison;
+    const verdictClass = comparison?.verdict || '';
+    const recommended = Number(comparison?.suggestedRating) || 3;
+    const audioMode = entry.mode === 'listening' || entry.mode === 'shadowing';
+    return `
+      <div class="view-enter fluency-session-view">
+        <div class="fluency-session-top">
+          <button class="soft-button" data-action="pauseFluency" type="button">Pausar</button>
+          <div><span>${session.index + 1} de ${session.queue.length}</span><div><i style="width:${progress}%"></i></div></div>
+          <small>${esc(fluencyModeLabels[entry.mode] || entry.mode)}</small>
+        </div>
+        <section class="fluency-study-card ${session.revealed ? 'revealed' : ''}">
+          <div class="fluency-card-eyebrow">${esc(prompt.eyebrow)} · ${esc(item.level)}</div>
+          ${audioMode ? `<button class="fluency-audio-button" data-action="speakFluency" type="button" aria-label="Ouvir frase">▶</button>` : ''}
+          <h2>${esc(prompt.prompt)}</h2>
+          <p>${esc(prompt.instruction)}</p>
+          ${prompt.expectsInput ? `<label class="fluency-answer-field"><span>Sua resposta</span><input id="fluencyAnswerInput" lang="ru" inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(session.answer || '')}" placeholder="Digite em russo…" ${session.revealed ? 'disabled' : ''}/></label>` : ''}
+          ${session.revealed ? `
+            <div class="fluency-feedback ${verdictClass}">
+              <span>${comparison?.note ? esc(comparison.note) : 'Compare com atenção antes de avaliar.'}</span>
+              <strong lang="ru">${esc(expected)}</strong>
+              ${entry.mode === 'cloze' ? `<small lang="ru">Frase completa: ${esc(item.targetPhrase)}</small>` : `<small>${esc(item.nativeTranslation)}</small>`}
+            </div>
+            <div class="fluency-explanation-grid">
+              <article><span>Por quê</span><p>${esc(item.grammarNote || 'A estrutura será explicada quando o material for enriquecido.')}</p></article>
+              ${item.mnemonicAssociation ? `<article><span>Âncora mental</span><p>${esc(item.mnemonicAssociation)}</p></article>` : ''}
+              ${item.wordBreakdown ? `<article><span>Por dentro da frase</span><p>${esc(item.wordBreakdown)}</p></article>` : ''}
+              ${item.pronunciationTip ? `<article><span>Pronúncia</span><p>${esc(item.pronunciationTip)}</p></article>` : ''}
+            </div>
+            <div class="fluency-rating-copy">Como foi recuperar sem olhar?</div>
+            <div class="fluency-rating-grid">
+              ${[[1, 'De novo'], [2, 'Difícil'], [3, 'Bom'], [4, 'Fácil']].map(([rating, label]) => `<button class="${recommended === rating ? 'recommended' : ''}" data-action="rateFluency" data-rating="${rating}" type="button"><strong>${rating}</strong><span>${label}</span></button>`).join('')}
+            </div>
+          ` : `
+            <div class="fluency-study-actions">
+              ${!audioMode && entry.mode !== 'recognition' ? `<button class="soft-button" data-action="speakFluency" type="button">▶ Ouvir depois</button>` : ''}
+              <button class="primary-button" data-action="revealFluency" type="button">Conferir resposta</button>
+            </div>
+          `}
+        </section>
+      </div>
+    `;
+  }
+
+  function renderFluency() {
+    const session = state.fluency.activeSession;
+    return session && !session.paused ? renderFluencySession() : renderFluencyDashboard();
+  }
+
+  function startFluencySession() {
+    const existing = state.fluency.activeSession;
+    if (existing && !existing.completedAt && existing.index < existing.queue.length) {
+      existing.paused = false;
+    } else {
+      state.fluency.activeSession = Fluency.buildSession(state.fluency, { date: localISO(), minutes: fluencyStudyMinutes() });
+    }
+    save();
+    render();
+    haptic('select');
+  }
+
+  function pauseFluencySession() {
+    if (!state.fluency.activeSession) return;
+    state.fluency.activeSession.paused = true;
+    save();
+    render();
+  }
+
+  function revealFluencyAnswer() {
+    const current = currentFluencyEntry();
+    if (!current) return;
+    const { session, entry, item } = current;
+    const prompt = Fluency.promptFor(item, entry.mode);
+    const answer = prompt.expectsInput ? String($('#fluencyAnswerInput')?.value || '').trim() : '';
+    if (prompt.expectsInput && !answer) {
+      toast('Digite sua resposta antes de conferir.');
+      $('#fluencyAnswerInput')?.focus?.();
+      return;
+    }
+    const expected = entry.mode === 'cloze' ? item.focusWord : item.targetPhrase;
+    session.answer = answer;
+    session.comparison = prompt.expectsInput
+      ? Fluency.gradeAnswer(expected, answer)
+      : { verdict: 'revealed', score: 1, suggestedRating: 3, note: entry.mode === 'shadowing' ? 'Ouça novamente e avalie sua pronúncia com honestidade.' : 'Você recuperou o sentido antes de olhar?' };
+    session.revealed = true;
+    save();
+    render({ quiet: true });
+    if (state.fluency.settings.autoplayAudio && entry.mode !== 'listening') speakRussian(item.targetPhrase);
+  }
+
+  function rateFluencyCard(rating) {
+    const current = currentFluencyEntry();
+    if (!current || !current.session.revealed) return;
+    const { session, entry, item } = current;
+    const value = clamp(Number(rating) || 1, 1, 4);
+    const updated = Fluency.scheduleReview(item, value, session.date, state.fluency.settings.requestRetention);
+    const itemIndex = state.fluency.items.findIndex((candidate) => candidate.id === item.id);
+    state.fluency.items[itemIndex] = updated;
+    const verdict = session.comparison?.verdict || 'revealed';
+    if (verdict === 'exact' || verdict === 'revealed' && value >= 3) session.correct += 1;
+    else if (verdict === 'minor' || value === 2) session.minor += 1;
+    else session.missed += 1;
+    session.ratings.push(value);
+    state.fluency.events.push({
+      id: Fluency.uid('review'),
+      itemId: item.id,
+      sourceId: item.sourceId,
+      sessionId: session.id,
+      date: session.date,
+      mode: entry.mode,
+      skill: Fluency.MODE_SKILLS[entry.mode],
+      rating: value,
+      verdict,
+      score: Number(session.comparison?.score) || (value / 4),
+      createdAt: new Date().toISOString()
+    });
+    if (value === 1 && !entry.retry) session.queue.push({ ...entry, retry: true, mode: 'recall' });
+    session.index += 1;
+    session.revealed = false;
+    session.comparison = null;
+    session.answer = '';
+    if (session.index >= session.queue.length) {
+      session.completedAt = new Date().toISOString();
+      state.fluency.sessions.push({
+        id: session.id,
+        date: session.date,
+        targetMinutes: session.targetMinutes,
+        startedAt: session.startedAt,
+        completedAt: session.completedAt,
+        reviews: session.ratings.length,
+        correct: session.correct,
+        minor: session.minor,
+        missed: session.missed
+      });
+      state.fluency.streak = Fluency.updateStreak(state.fluency.streak, session.date);
+      haptic('success');
+    } else {
+      haptic('select');
+    }
+    state.fluency.events = state.fluency.events.slice(-3000);
+    state.fluency.sessions = state.fluency.sessions.slice(-365);
+    save();
+    render({ quiet: true });
+  }
+
+  function finishFluencySession() {
+    state.fluency.activeSession = null;
+    save();
+    render();
+  }
+
+  function speakRussian(text) {
+    if (!('speechSynthesis' in globalThis) || typeof SpeechSynthesisUtterance !== 'function') {
+      toast('A voz russa não está disponível neste aparelho.');
+      return;
+    }
+    speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(String(text || 'Привет! Я изучаю русский язык.'));
+    utterance.lang = 'ru-RU';
+    utterance.rate = .86;
+    utterance.pitch = 1;
+    const voice = speechSynthesis.getVoices().find((candidate) => /^ru[-_]/i.test(candidate.lang));
+    if (voice) utterance.voice = voice;
+    speechSynthesis.speak(utterance);
+  }
+
   function render({ quiet = false, preserveScroll = quiet } = {}) {
     const scroller = $('#appShell');
     const previousScroll = preserveScroll ? Number(scroller?.scrollTop || 0) : 0;
     applyAppearance();
     renderNav();
-    const views = { today: renderToday, upcoming: renderUpcoming, goals: renderGoals };
+    const views = { today: renderToday, upcoming: renderUpcoming, goals: renderGoals, fluency: renderFluency };
     const root = $('#viewRoot');
     root.dataset.direction = motionDirection;
     root.dataset.update = quiet ? 'quiet' : 'animated';
     root.innerHTML = (views[state.view] || renderToday)();
+    const quickAdd = $('#quickAdd');
+    if (quickAdd) {
+      quickAdd.setAttribute('aria-label', state.view === 'fluency' ? 'Adicionar material de estudo' : 'Adicionar tarefa');
+      quickAdd.title = state.view === 'fluency' ? 'Adicionar material' : 'Adicionar tarefa';
+      quickAdd.classList.toggle('fluency-add', state.view === 'fluency');
+    }
     if (preserveScroll && scroller) scroller.scrollTop = previousScroll;
     updateAppBadge();
   }
@@ -1676,6 +1989,176 @@
         toast('Meta removida.');
       };
     }
+  }
+
+  function fluencyProfileModal() {
+    const profile = state.fluency.profile;
+    const levelOptions = (selected) => Fluency.VALID_LEVELS.map((level) => `<option value="${level}" ${level === selected ? 'selected' : ''}>${level}</option>`).join('');
+    openModal(`
+      <div class="modal-head">
+        <div><h2>Perfil de fluência</h2><p>O nível é separado por habilidade para o treino não ficar fácil ou impossível demais.</p></div>
+        <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <form id="fluencyProfileForm">
+        <div class="input-grid fluency-profile-grid">
+          <div class="field"><label>Idioma</label><select name="targetLanguage"><option value="ru" selected>Russo</option></select></div>
+          <div class="field"><label>Nível geral</label><select name="overallLevel">${levelOptions(profile.overallLevel)}</select></div>
+          ${Object.entries(fluencySkillLabels).map(([skill, label]) => `<div class="field"><label>${esc(label)}</label><select name="skill_${skill}">${levelOptions(profile.skillLevels[skill])}</select></div>`).join('')}
+          <div class="field"><label>Novos por dia</label><input name="newPerDay" type="number" min="0" max="30" inputmode="numeric" value="${state.fluency.settings.newPerDay}" /></div>
+          <div class="field"><label>Meta semanal</label><select name="weeklyGoal">${[3, 4, 5, 6, 7].map((days) => `<option value="${days}" ${days === profile.weeklyGoal ? 'selected' : ''}>${days} dias</option>`).join('')}</select></div>
+          <div class="field full fluency-routine-note"><strong>Rotina conectada</strong><span>O treino usa ${fluencyStudyMinutes()} min do bloco Russo PM. Terça 08:30 e sexta 10:00 são reconhecidas como dias de aula.</span></div>
+        </div>
+        <div class="modal-actions"><button class="soft-button modal-close" type="button">Cancelar</button><button class="primary-button" type="submit">Salvar perfil</button></div>
+      </form>
+    `, 'fluency-profile-modal');
+    $('#fluencyProfileForm').onsubmit = (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      state.fluency.profile.overallLevel = data.overallLevel;
+      state.fluency.profile.weeklyGoal = Number(data.weeklyGoal) || 7;
+      Object.keys(fluencySkillLabels).forEach((skill) => { state.fluency.profile.skillLevels[skill] = data[`skill_${skill}`]; });
+      state.fluency.settings.newPerDay = Number(data.newPerDay) || 0;
+      state.fluency = Fluency.sanitizeState(state.fluency);
+      save();
+      render();
+      closeModal();
+      toast('Perfil de fluência atualizado.');
+    };
+  }
+
+  function fluencyCardFromAI(card, sourceId, index) {
+    return Fluency.sanitizeItem({
+      id: Fluency.uid('fluency-card'),
+      sourceId,
+      order: Date.now() + index,
+      level: card.cefr_level || state.fluency.profile.overallLevel,
+      focusWord: card.focus_word,
+      lemma: card.lemma,
+      targetPhrase: card.target_phrase,
+      nativeTranslation: card.native_translation,
+      transliteration: card.transliteration,
+      literalGloss: card.literal_gloss,
+      wordBreakdown: card.word_breakdown,
+      grammarNote: card.grammar_note,
+      mnemonicAssociation: card.mnemonic_association,
+      pronunciationTip: card.pronunciation_tip,
+      sourceQuote: card.source_quote,
+      modePriority: card.mode_priority,
+      tags: Array.isArray(card.tags) ? [...card.tags, 'ia'] : ['ia']
+    }, index);
+  }
+
+  async function processFluencySource(sourceId, { file = null } = {}) {
+    let source = state.fluency.sources.find((candidate) => candidate.id === sourceId);
+    if (!source) return;
+    if (!file && !source.rawText && !source.storagePath) {
+      toast('Selecione esse PDF novamente para processá-lo.');
+      fluencySourceModal();
+      return;
+    }
+    source.status = 'processing';
+    source.note = 'Analisando conteúdo, nível, gramática e utilidade de cada cartão…';
+    save();
+    render({ quiet: true });
+    try {
+      const result = await window.OBJETIVOS_CLOUD?.generateFluencyCards?.({ source, file });
+      if (!result) throw new Error('A análise inteligente ainda não está disponível.');
+      source = state.fluency.sources.find((candidate) => candidate.id === sourceId) || source;
+      source.storagePath = result.storagePath || source.storagePath;
+      const existing = new Set(state.fluency.items.map((item) => `${Fluency.normalizeAnswer(item.targetPhrase)}|${Fluency.normalizeAnswer(item.nativeTranslation, { foldYo: false })}`));
+      const imported = (result.cards || []).map((card, index) => fluencyCardFromAI(card, source.id, index)).filter((item) => {
+        if (!item.targetPhrase || !item.nativeTranslation) return false;
+        const key = `${Fluency.normalizeAnswer(item.targetPhrase)}|${Fluency.normalizeAnswer(item.nativeTranslation, { foldYo: false })}`;
+        if (existing.has(key)) return false;
+        existing.add(key);
+        return true;
+      });
+      state.fluency.items.push(...imported);
+      source.itemCount = state.fluency.items.filter((item) => item.sourceId === source.id).length;
+      source.unresolvedCount = Math.max(0, Number(result.unresolved_count) || 0);
+      source.status = result.status === 'ok' && source.itemCount ? 'ready' : 'needs-ai';
+      source.note = String(result.summary || (imported.length ? 'Material enriquecido e pronto para estudar.' : 'Nenhum cartão novo foi necessário.')).slice(0, 500);
+      source.processedAt = new Date().toISOString();
+      state.fluency = Fluency.sanitizeState(state.fluency);
+      save();
+      render({ quiet: true });
+      toast(imported.length ? `${imported.length} cartão${imported.length === 1 ? '' : 'ões'} inteligente${imported.length === 1 ? '' : 's'} adicionado${imported.length === 1 ? '' : 's'}.` : source.note);
+    } catch (error) {
+      source = state.fluency.sources.find((candidate) => candidate.id === sourceId) || source;
+      if (error?.storagePath) source.storagePath = error.storagePath;
+      source.status = 'needs-ai';
+      source.note = String(error?.message || 'Não foi possível concluir a análise agora.').slice(0, 500);
+      save();
+      render({ quiet: true });
+      toast(source.note);
+    }
+  }
+
+  function fluencySourceModal() {
+    openModal(`
+      <div class="modal-head">
+        <div><h2>Adicionar material</h2><p>Cole conteúdo estudado ou selecione um arquivo. Nada entra na fila sem revisão.</p></div>
+        <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <form id="fluencySourceForm">
+        <div class="input-grid fluency-source-form-grid">
+          <div class="field full"><label>Nome do material</label><input name="title" maxlength="120" placeholder="Ex.: Aula 07 — família e casos" /></div>
+          <div class="field full"><label>Arquivo</label><input id="fluencySourceFile" name="file" type="file" accept=".txt,.md,.csv,.tsv,.pdf,text/plain,application/pdf" /><small id="fluencyFileStatus" class="form-note">TXT é importado agora. PDF será processado pelo pipeline inteligente.</small></div>
+          <div class="field full"><label>Palavras ou frases</label><textarea id="fluencySourceText" name="content" rows="8" placeholder="Uma por linha, neste formato:\nЭто моя книга. — Este é meu livro.\nЯ живу в Бразилии. — Eu moro no Brasil."></textarea><small class="form-note">Linhas sem tradução ficam separadas para a IA enriquecer, sem criar cartões ruins.</small></div>
+        </div>
+        <div class="modal-actions"><button class="soft-button modal-close" type="button">Cancelar</button><button class="primary-button" type="submit">Analisar material</button></div>
+      </form>
+    `, 'fluency-source-modal');
+    let selectedFile = null;
+    $('#fluencySourceFile').addEventListener('change', (event) => {
+      selectedFile = event.target.files?.[0] || null;
+      if (!selectedFile) return;
+      const status = $('#fluencyFileStatus');
+      if (/pdf/i.test(selectedFile.type) || /\.pdf$/i.test(selectedFile.name)) {
+        status.textContent = `${selectedFile.name} selecionado · aguardando extração inteligente segura.`;
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        $('#fluencySourceText').value = String(reader.result || '');
+        status.textContent = `${selectedFile.name} carregado. Revise o conteúdo antes de analisar.`;
+      };
+      reader.onerror = () => { status.textContent = 'Não foi possível ler este arquivo.'; };
+      reader.readAsText(selectedFile, 'utf-8');
+    });
+    $('#fluencySourceForm').onsubmit = (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const title = String(data.title || selectedFile?.name || '').trim();
+      const content = String(data.content || '').trim();
+      if (!title && !content && !selectedFile) {
+        toast('Adicione um nome, texto ou arquivo.');
+        return;
+      }
+      const sourceId = Fluency.uid('fluency-source');
+      const parsed = Fluency.parseImportedText(content, { sourceId, level: state.fluency.profile.overallLevel });
+      const isPdf = Boolean(selectedFile && (/pdf/i.test(selectedFile.type) || /\.pdf$/i.test(selectedFile.name)));
+      const source = Fluency.sanitizeSource({
+        id: sourceId,
+        title: title || `Material ${state.fluency.sources.length + 1}`,
+        kind: isPdf ? 'pdf' : 'text',
+        status: 'processing',
+        itemCount: parsed.items.length,
+        unresolvedCount: parsed.unresolved.length + (isPdf ? 1 : 0),
+        fileName: selectedFile?.name || '',
+        rawText: content,
+        unresolvedText: parsed.unresolved.join('\n'),
+        note: 'Material preservado; iniciando análise inteligente.'
+      });
+      state.fluency.sources.unshift(source);
+      state.fluency.items.push(...parsed.items);
+      state.fluency = Fluency.sanitizeState(state.fluency);
+      save();
+      render();
+      closeModal();
+      toast(parsed.items.length ? `${parsed.items.length} base${parsed.items.length === 1 ? '' : 's'} extraída${parsed.items.length === 1 ? '' : 's'}; enriquecendo com IA…` : 'Material registrado; iniciando análise inteligente…');
+      void processFluencySource(sourceId, { file: selectedFile });
+    };
   }
 
   function parseCommandDate(text, fallback = state.selectedDate || localISO()) {
@@ -2416,7 +2899,7 @@
     }
     const actionButton = event.target.closest('[data-action]');
     if (!actionButton) return;
-    const { action, id, date, projectId } = actionButton.dataset;
+    const { action, id, date, projectId, rating } = actionButton.dataset;
     const actions = {
       addTask: () => taskModal(null, date || (state.view === 'upcoming' && state.plannerDate ? state.plannerDate : state.selectedDate), projectId || (state.view === 'upcoming' ? state.selectedProject : null)),
       addProject: () => projectModal(),
@@ -2457,6 +2940,20 @@
         render({ quiet: true });
         haptic('select');
       },
+      startFluency: startFluencySession,
+      resumeFluency: startFluencySession,
+      pauseFluency: pauseFluencySession,
+      revealFluency: revealFluencyAnswer,
+      rateFluency: () => rateFluencyCard(rating),
+      finishFluency: finishFluencySession,
+      fluencyProfile: fluencyProfileModal,
+      addFluencySource: fluencySourceModal,
+      processFluencySource: () => processFluencySource(id),
+      speakFluency: () => {
+        const current = currentFluencyEntry();
+        if (current) speakRussian(current.item.targetPhrase);
+      },
+      speakFluencySample: () => speakRussian('Привет! Я изучаю русский язык.'),
       toggleCompletedDrawer: () => {
         const drawer = $('#completedDrawer');
         if (!drawer) return;
@@ -2471,11 +2968,23 @@
 
   $('#commandBtn').onclick = commandModal;
   $('#settingsBtn').onclick = settingsModal;
-  $('#quickAdd').onclick = () => taskModal(
-    null,
-    state.view === 'today' ? state.selectedDate : state.plannerDate || localISO(),
-    state.view === 'upcoming' ? state.selectedProject : null
-  );
+  $('#quickAdd').onclick = () => {
+    if (state.view === 'fluency') {
+      fluencySourceModal();
+      return;
+    }
+    taskModal(
+      null,
+      state.view === 'today' ? state.selectedDate : state.plannerDate || localISO(),
+      state.view === 'upcoming' ? state.selectedProject : null
+    );
+  };
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.target?.id !== 'fluencyAnswerInput') return;
+    event.preventDefault();
+    revealFluencyAnswer();
+  });
 
   window.addEventListener('storage', (event) => {
     if (event.key !== STORAGE_KEY || !event.newValue) return;
@@ -2508,10 +3017,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '26');
+      freshUrl.searchParams.set('build', '27');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=26').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=27').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
@@ -2529,6 +3038,10 @@
     recurrenceLabel,
     nextPendingTaskDate,
     projectForTask,
+    startFluencySession,
+    revealFluencyAnswer,
+    rateFluencyCard,
+    finishFluencySession,
     setView,
     selectPlannerDate,
     syncSystemDay,
