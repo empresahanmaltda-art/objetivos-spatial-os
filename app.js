@@ -1455,10 +1455,9 @@
             ${fluency.sources.map((source) => `
               <article class="fluency-source-card">
                 <div class="fluency-source-icon">${source.kind === 'notion' ? 'N' : source.kind === 'pdf' ? 'PDF' : source.kind === 'starter' ? 'A1' : 'TXT'}</div>
-                <div><strong>${esc(source.title)}</strong><span>${source.itemCount} cartões${source.unresolvedCount ? ` · ${source.unresolvedCount} aguardando IA` : ''}</span><small>${esc(source.note || (source.status === 'ready' ? 'Pronto para estudar' : 'Aguardando processamento'))}</small></div>
+                <div><strong>${esc(source.title)}</strong><span>${source.itemCount} cartões${source.unresolvedCount ? ` · ${source.unresolvedCount} aguardando organização` : ''}</span><small>${esc(source.note || (source.status === 'ready' ? 'Pronto para estudar' : 'Envie a aula nesta conversa para organizar'))}</small></div>
                 <div class="fluency-source-actions">
                   <i class="source-status ${source.status}"></i>
-                  ${source.status === 'needs-ai' && (source.rawText || source.storagePath) ? `<button class="chip-button" data-action="processFluencySource" data-id="${esc(source.id)}" type="button">Processar</button>` : ''}
                 </div>
               </article>
             `).join('')}
@@ -2036,7 +2035,12 @@
   function fluencyCurriculumModal() {
     const curriculum = Fluency.curriculumProgress(state.fluency);
     const lessonCount = curriculum.lessons.length;
-    const pageCount = curriculum.lessons.reduce((sum, lesson) => sum + (Number(lesson.pageCount) || 0), 0);
+    const uniqueMaterials = new Map();
+    curriculum.lessons.forEach((lesson) => {
+      const key = lesson.externalUrl || lesson.id;
+      if (!uniqueMaterials.has(key)) uniqueMaterials.set(key, Number(lesson.pageCount) || 0);
+    });
+    const pageCount = [...uniqueMaterials.values()].reduce((sum, pages) => sum + pages, 0);
     openModal(`
       <div class="modal-head">
         <div><h2>Seu caminho no russo</h2><p>${lessonCount} aula${lessonCount === 1 ? '' : 's'} particular${lessonCount === 1 ? '' : 'es'}${pageCount ? ` e ${pageCount} páginas` : ''} organizadas numa progressão recuperável.</p></div>
@@ -2075,7 +2079,7 @@
           ${Object.entries(fluencySkillLabels).map(([skill, label]) => `<div class="field"><label>${esc(label)}</label><select name="skill_${skill}">${levelOptions(profile.skillLevels[skill])}</select></div>`).join('')}
           <div class="field"><label>Novos por dia</label><input name="newPerDay" type="number" min="0" max="30" inputmode="numeric" value="${state.fluency.settings.newPerDay}" /></div>
           <div class="field"><label>Meta semanal</label><select name="weeklyGoal">${[3, 4, 5, 6, 7].map((days) => `<option value="${days}" ${days === profile.weeklyGoal ? 'selected' : ''}>${days} dias</option>`).join('')}</select></div>
-          <div class="field full fluency-routine-note"><strong>Rotina conectada</strong><span>O treino usa ${fluencyStudyMinutes()} min do bloco Russo PM. Terça 08:30 e sexta 10:00 são reconhecidas como dias de aula.</span></div>
+          <div class="field full fluency-routine-note"><strong>Rotina conectada</strong><span>O treino usa ${fluencyStudyMinutes()} min do bloco Russo PM. Terça e quinta são reconhecidas como dias de aula.</span></div>
         </div>
         <div class="modal-actions"><button class="soft-button modal-close" type="button">Cancelar</button><button class="primary-button" type="submit">Salvar perfil</button></div>
       </form>
@@ -2095,129 +2099,45 @@
     };
   }
 
-  function fluencyCardFromAI(card, sourceId, index) {
-    return Fluency.sanitizeItem({
-      id: Fluency.uid('fluency-card'),
-      sourceId,
-      order: Date.now() + index,
-      level: card.cefr_level || state.fluency.profile.overallLevel,
-      focusWord: card.focus_word,
-      lemma: card.lemma,
-      targetPhrase: card.target_phrase,
-      nativeTranslation: card.native_translation,
-      transliteration: card.transliteration,
-      literalGloss: card.literal_gloss,
-      wordBreakdown: card.word_breakdown,
-      grammarNote: card.grammar_note,
-      mnemonicAssociation: card.mnemonic_association,
-      pronunciationTip: card.pronunciation_tip,
-      sourceQuote: card.source_quote,
-      modePriority: card.mode_priority,
-      tags: Array.isArray(card.tags) ? [...card.tags, 'ia'] : ['ia']
-    }, index);
-  }
-
-  async function processFluencySource(sourceId, { file = null } = {}) {
-    let source = state.fluency.sources.find((candidate) => candidate.id === sourceId);
-    if (!source) return;
-    if (!file && !source.rawText && !source.storagePath) {
-      toast('Selecione esse PDF novamente para processá-lo.');
-      fluencySourceModal();
-      return;
-    }
-    source.status = 'processing';
-    source.note = 'Analisando conteúdo, nível, gramática e utilidade de cada cartão…';
-    save();
-    render({ quiet: true });
-    try {
-      const result = await window.OBJETIVOS_CLOUD?.generateFluencyCards?.({ source, file });
-      if (!result) throw new Error('A análise inteligente ainda não está disponível.');
-      source = state.fluency.sources.find((candidate) => candidate.id === sourceId) || source;
-      source.storagePath = result.storagePath || source.storagePath;
-      const existing = new Set(state.fluency.items.map((item) => `${Fluency.normalizeAnswer(item.targetPhrase)}|${Fluency.normalizeAnswer(item.nativeTranslation, { foldYo: false })}`));
-      const imported = (result.cards || []).map((card, index) => fluencyCardFromAI(card, source.id, index)).filter((item) => {
-        if (!item.targetPhrase || !item.nativeTranslation) return false;
-        const key = `${Fluency.normalizeAnswer(item.targetPhrase)}|${Fluency.normalizeAnswer(item.nativeTranslation, { foldYo: false })}`;
-        if (existing.has(key)) return false;
-        existing.add(key);
-        return true;
-      });
-      state.fluency.items.push(...imported);
-      source.itemCount = state.fluency.items.filter((item) => item.sourceId === source.id).length;
-      source.unresolvedCount = Math.max(0, Number(result.unresolved_count) || 0);
-      source.status = result.status === 'ok' && source.itemCount ? 'ready' : 'needs-ai';
-      source.note = String(result.summary || (imported.length ? 'Material enriquecido e pronto para estudar.' : 'Nenhum cartão novo foi necessário.')).slice(0, 500);
-      source.processedAt = new Date().toISOString();
-      state.fluency = Fluency.sanitizeState(state.fluency);
-      save();
-      render({ quiet: true });
-      toast(imported.length ? `${imported.length} cartão${imported.length === 1 ? '' : 'ões'} inteligente${imported.length === 1 ? '' : 's'} adicionado${imported.length === 1 ? '' : 's'}.` : source.note);
-    } catch (error) {
-      source = state.fluency.sources.find((candidate) => candidate.id === sourceId) || source;
-      if (error?.storagePath) source.storagePath = error.storagePath;
-      source.status = 'needs-ai';
-      source.note = String(error?.message || 'Não foi possível concluir a análise agora.').slice(0, 500);
-      save();
-      render({ quiet: true });
-      toast(source.note);
-    }
-  }
-
   function fluencySourceModal() {
     openModal(`
       <div class="modal-head">
-        <div><h2>Adicionar material</h2><p>Cole conteúdo estudado ou selecione um arquivo. Nada entra na fila sem revisão.</p></div>
+        <div><h2>Adicionar anotações</h2><p>Para uma aula nova, envie o Canva ou PDF nesta conversa. Aqui você pode importar apenas pares já revisados.</p></div>
         <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
       </div>
       <form id="fluencySourceForm">
         <div class="input-grid fluency-source-form-grid">
-          <div class="field full"><label>Nome do material</label><input name="title" maxlength="120" placeholder="Ex.: Aula 07 — família e casos" /></div>
-          <div class="field full"><label>Arquivo</label><input id="fluencySourceFile" name="file" type="file" accept=".txt,.md,.csv,.tsv,.pdf,text/plain,application/pdf" /><small id="fluencyFileStatus" class="form-note">TXT é importado agora. PDF será processado pelo pipeline inteligente.</small></div>
-          <div class="field full"><label>Palavras ou frases</label><textarea id="fluencySourceText" name="content" rows="8" placeholder="Uma por linha, neste formato:\nЭто моя книга. — Este é meu livro.\nЯ живу в Бразилии. — Eu moro no Brasil."></textarea><small class="form-note">Linhas sem tradução ficam separadas para a IA enriquecer, sem criar cartões ruins.</small></div>
+          <div class="field full"><label>Nome das anotações</label><input name="title" maxlength="120" placeholder="Ex.: palavras que anotei hoje" /></div>
+          <div class="field full"><label>Palavras ou frases</label><textarea id="fluencySourceText" name="content" rows="8" placeholder="Uma por linha, neste formato:\nЭто моя книга. — Este é meu livro.\nЯ живу в Бразилии. — Eu moro no Brasil."></textarea><small class="form-note">O app importa somente linhas com russo e tradução. Conteúdo completo de aula é analisado por mim nesta conversa.</small></div>
         </div>
-        <div class="modal-actions"><button class="soft-button modal-close" type="button">Cancelar</button><button class="primary-button" type="submit">Analisar material</button></div>
+        <div class="modal-actions"><button class="soft-button modal-close" type="button">Cancelar</button><button class="primary-button" type="submit">Importar anotações</button></div>
       </form>
     `, 'fluency-source-modal');
-    let selectedFile = null;
-    $('#fluencySourceFile').addEventListener('change', (event) => {
-      selectedFile = event.target.files?.[0] || null;
-      if (!selectedFile) return;
-      const status = $('#fluencyFileStatus');
-      if (/pdf/i.test(selectedFile.type) || /\.pdf$/i.test(selectedFile.name)) {
-        status.textContent = `${selectedFile.name} selecionado · aguardando extração inteligente segura.`;
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        $('#fluencySourceText').value = String(reader.result || '');
-        status.textContent = `${selectedFile.name} carregado. Revise o conteúdo antes de analisar.`;
-      };
-      reader.onerror = () => { status.textContent = 'Não foi possível ler este arquivo.'; };
-      reader.readAsText(selectedFile, 'utf-8');
-    });
     $('#fluencySourceForm').onsubmit = (event) => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-      const title = String(data.title || selectedFile?.name || '').trim();
+      const title = String(data.title || '').trim();
       const content = String(data.content || '').trim();
-      if (!title && !content && !selectedFile) {
-        toast('Adicione um nome, texto ou arquivo.');
+      if (!content) {
+        toast('Cole ao menos uma linha com russo e tradução.');
         return;
       }
       const sourceId = Fluency.uid('fluency-source');
       const parsed = Fluency.parseImportedText(content, { sourceId, level: state.fluency.profile.overallLevel });
-      const isPdf = Boolean(selectedFile && (/pdf/i.test(selectedFile.type) || /\.pdf$/i.test(selectedFile.name)));
+      if (!parsed.items.length) {
+        toast('Nenhum par russo–português foi encontrado. Envie o material nesta conversa para eu organizar.');
+        return;
+      }
       const source = Fluency.sanitizeSource({
         id: sourceId,
         title: title || `Material ${state.fluency.sources.length + 1}`,
-        kind: isPdf ? 'pdf' : 'text',
-        status: 'processing',
+        kind: 'text',
+        status: 'ready',
         itemCount: parsed.items.length,
-        unresolvedCount: parsed.unresolved.length + (isPdf ? 1 : 0),
-        fileName: selectedFile?.name || '',
+        unresolvedCount: parsed.unresolved.length,
         rawText: content,
         unresolvedText: parsed.unresolved.join('\n'),
-        note: 'Material preservado; iniciando análise inteligente.'
+        note: parsed.unresolved.length ? 'Pares importados; linhas restantes aguardam organização nesta conversa.' : 'Pares revisados e prontos para estudar.'
       });
       state.fluency.sources.unshift(source);
       state.fluency.items.push(...parsed.items);
@@ -2225,8 +2145,7 @@
       save();
       render();
       closeModal();
-      toast(parsed.items.length ? `${parsed.items.length} base${parsed.items.length === 1 ? '' : 's'} extraída${parsed.items.length === 1 ? '' : 's'}; enriquecendo com IA…` : 'Material registrado; iniciando análise inteligente…');
-      void processFluencySource(sourceId, { file: selectedFile });
+      toast(`${parsed.items.length} base${parsed.items.length === 1 ? '' : 's'} importada${parsed.items.length === 1 ? '' : 's'} com segurança.`);
     };
   }
 
@@ -3019,7 +2938,6 @@
       fluencyCurriculum: fluencyCurriculumModal,
       fluencyProfile: fluencyProfileModal,
       addFluencySource: fluencySourceModal,
-      processFluencySource: () => processFluencySource(id),
       speakFluency: () => {
         const current = currentFluencyEntry();
         if (current) speakRussian(current.item.targetPhrase);
@@ -3088,10 +3006,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '32');
+      freshUrl.searchParams.set('build', '33');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=32').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=33').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {

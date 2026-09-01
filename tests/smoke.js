@@ -172,8 +172,6 @@ const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const swSource = fs.readFileSync('sw.js', 'utf8');
 const cloudSyncSource = fs.readFileSync('cloud-sync.js', 'utf8');
 const pushSource = fs.readFileSync('supabase/functions/push-due/index.ts', 'utf8');
-const fluencyFunctionSource = fs.readFileSync('supabase/functions/fluency-generate/index.ts', 'utf8');
-const fluencyMigrationSource = fs.readFileSync('supabase/migrations/202609010001_fluency_materials.sql', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 const pngDimensions = (path) => {
   const file = fs.readFileSync(path);
@@ -198,15 +196,14 @@ assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing')
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
 assert(!indexSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public page');
 assert(!swSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public cache');
-assert(indexSource.includes('fluency-engine.js?v=32'), 'Fluency engine missing from the public page');
-assert(swSource.includes("'./fluency-engine.js?v=32'"), 'Fluency engine must be available offline');
+assert(indexSource.includes('fluency-engine.js?v=33'), 'Fluency engine missing from the public page');
+assert(swSource.includes("'./fluency-engine.js?v=33'"), 'Fluency engine must be available offline');
 assert(appSource.includes("data-action=\"startFluencyQuick\""), 'class-day warmup control missing');
 assert(appSource.includes("startFluencyQuick: () => startFluencySession(10, 'warmup')"), 'class-day warmup must use a ten-minute plan');
 assert(appSource.includes("item.kind === 'warmup'"), 'completed warmups must not reappear later on class days');
-assert(fluencyFunctionSource.includes("text: { format: { type: 'json_schema'"), 'AI output must use strict Structured Outputs');
-assert(fluencyFunctionSource.includes("supabase.auth.getUser()"), 'Fluency AI must authenticate the current user');
-assert(fluencyFunctionSource.includes("store: false"), 'AI material processing must not retain model responses by default');
-assert(fluencyMigrationSource.includes("fluency_materials_select_own"), 'private per-user material policy missing');
+assert(appSource.includes('envie o Canva ou PDF nesta conversa'), 'new lessons must be routed through this private conversation');
+assert(!appSource.includes('processFluencySource'), 'the app must not expose an external AI processing path');
+assert(!cloudSyncSource.includes('functions.invoke'), 'private lessons must not be sent to an Edge Function');
 assert(manifest.icons.some((icon) => icon.src === 'assets/os-icon-v18-192.png' && icon.type === 'image/png'));
 assert(manifest.icons.some((icon) => icon.src === 'assets/os-icon-v18-512.png' && icon.purpose.includes('maskable')));
 assert.deepStrictEqual(pngDimensions('assets/os-icon-v18-180.png'), [180, 180]);
@@ -458,13 +455,13 @@ assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mo
 assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
 assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
-assert(indexSource.includes('styles.css?v=32') && indexSource.includes('app.js?v=32') && indexSource.includes('cloud-sync.js?v=32'), 'v32 asset cache keys missing');
-assert(swSource.includes("objetivos-spatial-v32"), 'v32 service-worker cache missing');
+assert(indexSource.includes('styles.css?v=33') && indexSource.includes('app.js?v=33') && indexSource.includes('cloud-sync.js?v=33'), 'v33 asset cache keys missing');
+assert(swSource.includes("objetivos-spatial-v33"), 'v33 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
-assert(appSource.includes("freshUrl.searchParams.set('build', '32')"), 'PWA refresh must point to build 32');
-assert(appSource.includes("serviceWorker.register('./sw.js?v=32')"), 'PWA must register the build 32 service worker');
+assert(appSource.includes("freshUrl.searchParams.set('build', '33')"), 'PWA refresh must point to build 33');
+assert(appSource.includes("serviceWorker.register('./sw.js?v=33')"), 'PWA must register the build 33 service worker');
 assert(swSource.includes("fetch(event.request, { cache: 'no-store' })"), 'PWA navigation must bypass stale iOS caches');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
 ['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {

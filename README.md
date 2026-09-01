@@ -33,8 +33,8 @@ Aplicativo pessoal de execução diária: tarefas, projetos, metas com prazo e a
 - Proteção contra acúmulo: no máximo 20% da sessão vem do backlog atrasado.
 - Comparação Unicode tolerante a pequenos erros e à diferença entre `е` e `ё`.
 - Voz russa nativa do aparelho e explicações de gramática, estrutura, pronúncia e associação mental.
-- Importação preservada de texto e PDF; materiais privados ficam isolados por usuário.
-- Pipeline opcional de IA preparado para Responses API e Structured Outputs estrito, com ativação separada do currículo privado.
+- Importação local de pares russo–português já revisados, sem transmissão para serviços externos.
+- Aulas novas, Canvas e PDFs são analisados nesta conversa e gravados diretamente no currículo privado do usuário.
 
 ## Executar localmente
 
@@ -52,12 +52,4 @@ No iPhone, notificações com o app fechado exigem instalar o site na Tela de In
 
 ## Fluency inteligente
 
-O motor local fica em `fluency-engine.js` e continua funcionando offline depois que o usuário autenticado sincroniza seu estado. Currículos e links particulares vivem apenas no registro protegido por RLS no Supabase. O enriquecimento opcional de materiais fica em `supabase/functions/fluency-generate`: a chave da OpenAI nunca entra no PWA. Quando ativada conscientemente, a função autentica o usuário, baixa somente arquivos do caminho privado dele, trata o conteúdo como dado não confiável e devolve até 30 cartões em JSON estrito usando `store: false`.
-
-Para ativar o pipeline em um projeto Supabase já vinculado:
-
-    supabase db push
-    supabase secrets set OPENAI_API_KEY=... OPENAI_FLUENCY_MODEL=gpt-5.6-terra
-    supabase functions deploy fluency-generate
-
-O bucket `fluency-materials` é privado e criado pela migration `202609010001_fluency_materials.sql`. Se a IA estiver temporariamente indisponível, o texto original e as linhas ainda não resolvidas permanecem no estado sincronizado; o material pode ser processado depois sem perda.
+O motor local fica em `fluency-engine.js` e continua funcionando offline depois que o usuário autenticado sincroniza seu estado. Currículos e links particulares vivem apenas no registro protegido por RLS no Supabase. O PWA não envia PDFs nem textos de aula para uma API de IA: aulas novas são entregues e analisadas nesta conversa, depois inseridas diretamente no estado privado sem entrar no repositório público.

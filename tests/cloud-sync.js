@@ -10,7 +10,6 @@ async function main() {
   let remoteApplied = null;
   let status = '';
   let oauthRequest = null;
-  let fluencyRequest = null;
   const session = { user: { id: 'user-1', email: 'owner@example.com' } };
   const localState = {
     version: 3,
@@ -45,13 +44,7 @@ async function main() {
         subscribe() { return this; }
       };
     },
-    removeChannel() {},
-    functions: {
-      async invoke(name, options) {
-        fluencyRequest = { name, options };
-        return { data: { status: 'ok', summary: 'Pronto', unresolved_count: 0, cards: [{ target_phrase: 'Привет!', native_translation: 'Oi!' }] }, error: null };
-      }
-    }
+    removeChannel() {}
   };
 
   const api = {
@@ -160,14 +153,9 @@ async function main() {
   assert.strictEqual(oauthRequest.options.redirectTo, 'https://empresahanmaltda-art.github.io/objetivos-spatial-os/');
   assert.strictEqual(oauthRequest.options.queryParams.prompt, 'select_account');
 
-  const fluencyResult = await window.OBJETIVOS_CLOUD.generateFluencyCards({
-    source: { id: 'lesson-1', title: 'Aula 1', rawText: 'Привет — Oi' }
-  });
-  assert.strictEqual(fluencyRequest.name, 'fluency-generate');
-  assert.strictEqual(fluencyRequest.options.body.level, 'A1');
-  assert.strictEqual(fluencyResult.cards[0].target_phrase, 'Привет!');
+  assert.strictEqual(window.OBJETIVOS_CLOUD.generateFluencyCards, undefined, 'private lessons must not be sent to an external AI function');
 
-  console.log(JSON.stringify({ ok: true, initialUpload: true, autosaveUpload: true, realtimeApply: true, googleOAuth: true, fluencyAI: true }));
+  console.log(JSON.stringify({ ok: true, initialUpload: true, autosaveUpload: true, realtimeApply: true, googleOAuth: true, privateLessonApiDisabled: true }));
 }
 
 main().catch((error) => {

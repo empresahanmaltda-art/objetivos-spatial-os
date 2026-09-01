@@ -293,55 +293,6 @@
     }
   }
 
-  function safeStorageName(value = 'material') {
-    return String(value)
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9._-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 120) || 'material';
-  }
-
-  async function generateFluencyCards({ source, file = null } = {}) {
-    if (!runtime.session || !runtime.client) throw new Error('Conecte sua conta para usar a análise inteligente.');
-    if (!source?.id) throw new Error('Material inválido.');
-    let storagePath = String(source.storagePath || '');
-    if (file) {
-      if (file.size > 12 * 1024 * 1024) throw new Error('O PDF deve ter no máximo 12 MB.');
-      storagePath = `${runtime.session.user.id}/${source.id}/${safeStorageName(file.name)}`;
-      const { error: uploadError } = await runtime.client.storage
-        .from('fluency-materials')
-        .upload(storagePath, file, { upsert: true, contentType: file.type || undefined });
-      if (uploadError) throw new Error(uploadError.message || 'Não foi possível enviar o arquivo com segurança.');
-    }
-    const { data, error } = await runtime.client.functions.invoke('fluency-generate', {
-      body: {
-        sourceId: source.id,
-        title: source.title,
-        content: source.rawText || source.unresolvedText || '',
-        storagePath,
-        targetLanguage: 'Russian',
-        nativeLanguage: 'Brazilian Portuguese',
-        level: source.level || api()?.getState?.()?.fluency?.profile?.overallLevel || 'A1'
-      }
-    });
-    if (error) {
-      let message = error.message || 'A análise inteligente falhou.';
-      try {
-        const response = error.context?.clone?.();
-        const details = await response?.json?.();
-        if (details?.error) message = details.error;
-      } catch {
-        // Preserve the SDK error when the response body is unavailable.
-      }
-      const failure = new Error(message);
-      failure.storagePath = storagePath;
-      throw failure;
-    }
-    if (!data || !Array.isArray(data.cards)) throw new Error(data?.error || 'O servidor devolveu uma resposta inválida.');
-    return { ...data, storagePath };
-  }
-
   function bindSettings() {
     const accountButton = document.querySelector('#cloudAccountBtn');
     const pushButton = document.querySelector('#pushServerBtn');
@@ -428,8 +379,7 @@
   window.OBJETIVOS_CLOUD = {
     bindSettings,
     signInWithGoogle,
-    uploadNow: () => uploadState(api()?.getState?.(), { force: true }),
-    generateFluencyCards
+    uploadNow: () => uploadState(api()?.getState?.(), { force: true })
   };
   boot().catch((error) => {
     const message = error.message || 'Falha ao iniciar sincronização.';
