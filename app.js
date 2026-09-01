@@ -473,6 +473,8 @@
     if (!input || typeof input !== 'object') return base;
     const previousVersion = Number(input.version) || 0;
     const settings = { ...defaultSettings(), ...(input.settings || {}) };
+    settings.haptics = true;
+    settings.motion = true;
     if (!input.settings?.customGlow && input.settings?.customAmbient) settings.customGlow = input.settings.customAmbient;
     settings.savedThemes = Array.isArray(settings.savedThemes)
       ? settings.savedThemes.slice(0, 12).map(sanitizeSavedTheme)
@@ -1407,75 +1409,6 @@
     if (wasLocked && scroller) scroller.scrollTop = modalScrollY;
   }
 
-  const canvasDiagnosticStages = [
-    { title: 'App completo', detail: 'Nenhuma camada removida.' },
-    { title: 'Sem o botão +', detail: 'Remove somente o botão flutuante.' },
-    { title: 'Sem a navegação', detail: 'Remove também Hoje, Projetos e Metas.' },
-    { title: 'Sem o painel', detail: 'Remove também tarefas, projetos e metas.' },
-    { title: 'Sem o topo', detail: 'Remove também logo e ações superiores.' },
-    { title: 'Sem os efeitos de fundo', detail: 'Remove também glow, ambiente e textura.' },
-    { title: 'Somente o canvas verde', detail: 'Remove toda a interface; resta apenas a área realmente desenhada pelo site.' }
-  ];
-  let canvasDiagnosticStage = 0;
-
-  function canvasViewportMetrics() {
-    const screenHeight = Math.round(Number(globalThis.screen?.height) || 0);
-    const innerHeight = Math.round(Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0);
-    const clientHeight = Math.round(Number(document.documentElement?.clientHeight) || 0);
-    const visualHeight = Math.round(Number(globalThis.visualViewport?.height) || innerHeight);
-    return { screenHeight, innerHeight, clientHeight, visualHeight, gap: Math.max(0, screenHeight - innerHeight) };
-  }
-
-  function renderCanvasDiagnostic() {
-    const controller = $('#canvasDiagnosticController');
-    if (!controller) return;
-    const stage = canvasDiagnosticStages[canvasDiagnosticStage];
-    const metrics = canvasViewportMetrics();
-    controller.innerHTML = `
-      <div class="canvas-diagnostic-copy">
-        <span>DIAGNÓSTICO ${canvasDiagnosticStage + 1}/${canvasDiagnosticStages.length}</span>
-        <strong>${esc(stage.title)}</strong>
-        <small>${esc(stage.detail)}</small>
-        <output>Tela ${metrics.screenHeight}px · app ${metrics.innerHeight}px · canvas ${metrics.clientHeight}px · visual ${metrics.visualHeight}px · diferença ${metrics.gap}px</output>
-      </div>
-      <div class="canvas-diagnostic-actions">
-        <button type="button" data-canvas-diagnostic-prev ${canvasDiagnosticStage === 0 ? 'disabled' : ''}>Anterior</button>
-        <button type="button" data-canvas-diagnostic-next ${canvasDiagnosticStage === canvasDiagnosticStages.length - 1 ? 'disabled' : ''}>Próximo</button>
-        <button type="button" data-canvas-diagnostic-stop>Fechar</button>
-      </div>
-    `;
-    $('[data-canvas-diagnostic-prev]', controller).onclick = () => setCanvasDiagnosticStage(canvasDiagnosticStage - 1);
-    $('[data-canvas-diagnostic-next]', controller).onclick = () => setCanvasDiagnosticStage(canvasDiagnosticStage + 1);
-    $('[data-canvas-diagnostic-stop]', controller).onclick = stopCanvasDiagnostic;
-  }
-
-  function setCanvasDiagnosticStage(stage) {
-    canvasDiagnosticStage = clamp(Number(stage) || 0, 0, canvasDiagnosticStages.length - 1);
-    document.documentElement.dataset.canvasDiagnostic = String(canvasDiagnosticStage);
-    renderCanvasDiagnostic();
-  }
-
-  function stopCanvasDiagnostic() {
-    delete document.documentElement.dataset.canvasDiagnostic;
-    document.body?.classList.remove('canvas-diagnostic-active');
-    $('#canvasDiagnosticController')?.remove();
-    canvasDiagnosticStage = 0;
-    applyAppearance();
-  }
-
-  function startCanvasDiagnostic() {
-    closeModal();
-    $('#canvasDiagnosticController')?.remove();
-    const controller = document.createElement('aside');
-    controller.id = 'canvasDiagnosticController';
-    controller.className = 'canvas-diagnostic-controller';
-    controller.setAttribute('role', 'dialog');
-    controller.setAttribute('aria-label', 'Diagnóstico do canvas');
-    document.body.append(controller);
-    document.body.classList.add('canvas-diagnostic-active');
-    setCanvasDiagnosticStage(0);
-  }
-
   function repeatPresetFor(task) {
     const repeat = task?.repeat || normalizeRepeat(task || {});
     if (!repeat) return 'none';
@@ -2010,10 +1943,9 @@
       glassBlur: state.settings.glassBlur
     } : activeSavedTheme || themePresets[activeTheme];
     const notificationPermission = 'Notification' in globalThis ? Notification.permission : 'unsupported';
-    const routineCount = state.tasks.filter((task) => task.routine).length;
     openModal(`
       <div class="modal-head">
-        <div><h2>Configurações</h2><p>Cores, movimento, recorrências e comportamento do seu Spatial OS.</p></div>
+        <div><h2>Configurações</h2><p>Aparência, notificações, backup e gerenciamento do seu Spatial OS.</p></div>
         <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
       </div>
       <section class="appearance-panel">
@@ -2053,10 +1985,6 @@
       </section>
       <div class="settings-list">
         <div class="setting-row">
-          <div class="setting-copy"><strong>Rotina Operação Moscou</strong><span>${routineCount} recorrências configuradas: acordar 07:00, refeições, estudo, TikTok, corpo, marketing e russo.</span></div>
-          <button class="soft-button" id="restoreRoutineBtn" type="button">Restaurar</button>
-        </div>
-        <div class="setting-row">
           <div class="setting-copy"><strong>Lembretes neste aparelho</strong><span>${notificationPermission === 'granted' ? 'Fallback local ativo: 30 minutos antes e exatamente no horário, sem duplicar o push.' : 'Ative a permissão para receber os dois alertas de cada tarefa com horário.'}</span></div>
           <label class="native-switch"><input id="notificationToggle" type="checkbox" switch ${state.settings.notificationsEnabled ? 'checked' : ''}/><span></span></label>
         </div>
@@ -2065,38 +1993,8 @@
           <button class="soft-button" id="pushServerBtn" type="button">Ativar</button>
         </div>
         <div class="setting-row">
-          <div class="setting-copy"><strong>Movimento Spatial</strong><span>Transições elásticas, swipe nos dias e saída animada ao concluir.</span></div>
-          <label class="native-switch"><input id="motionToggle" type="checkbox" switch ${state.settings.motion !== false ? 'checked' : ''}/><span></span></label>
-        </div>
-        <div class="setting-row">
-          <div class="setting-copy"><strong>Feedback tátil</strong><span>Vibra onde o navegador permite; os switches usam o toque nativo do iOS 18+.</span></div>
-          <label class="native-switch"><input id="hapticToggle" type="checkbox" switch ${state.settings.haptics !== false ? 'checked' : ''}/><span></span></label>
-        </div>
-        <div class="setting-row swipe-setting">
-          <div class="setting-copy"><strong>Ações ao arrastar</strong><span>Mesmo princípio do Todoist: escolha o que cada direção faz.</span></div>
-          <div class="swipe-selects">
-            <label>← <select id="swipeLeft"><option value="complete" ${state.settings.swipeLeft === 'complete' ? 'selected' : ''}>Concluir</option><option value="schedule" ${state.settings.swipeLeft === 'schedule' ? 'selected' : ''}>Reagendar</option><option value="none" ${state.settings.swipeLeft === 'none' ? 'selected' : ''}>Nada</option></select></label>
-            <label>→ <select id="swipeRight"><option value="schedule" ${state.settings.swipeRight === 'schedule' ? 'selected' : ''}>Reagendar</option><option value="complete" ${state.settings.swipeRight === 'complete' ? 'selected' : ''}>Concluir</option><option value="none" ${state.settings.swipeRight === 'none' ? 'selected' : ''}>Nada</option></select></label>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-copy"><strong>Salvamento automático</strong><span>Cada tarefa, conclusão e alteração de meta é salva neste navegador imediatamente.</span></div>
-          <span class="deadline-chip">ativo</span>
-        </div>
-        <div class="setting-row" id="cloudSettingRow">
-          <div class="setting-copy"><strong>Celular ↔ computador</strong><span id="cloudStatusCopy">Verificando o servidor seguro…</span></div>
-          <button class="google-signin-button" id="cloudAccountBtn" type="button" aria-label="Continuar com Google">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4L15.4 17c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-4V7.4H3.2a10 10 0 0 0 0 9.2L6.5 14Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.2 7.4L6.5 10A5.8 5.8 0 0 1 12 6Z"/></svg>
-            <span>Continuar com Google</span>
-          </button>
-        </div>
-        <div class="setting-row">
           <div class="setting-copy"><strong>Backup</strong><span>Leve todas as tarefas e metas em um arquivo JSON.</span></div>
           <div><button class="soft-button" id="exportBtn" type="button">Exportar</button> <button class="soft-button" id="importBtn" type="button">Importar</button><input id="importFile" type="file" accept="application/json" hidden /></div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-copy"><strong>Diagnóstico do canvas</strong><span>Remove cada camada visual em sequência para identificar a faixa inferior. É temporário e não altera seus dados.</span></div>
-          <button class="soft-button" id="canvasDiagnosticBtn" type="button">Iniciar teste</button>
         </div>
         <div class="setting-row">
           <div class="setting-copy"><strong>Progresso das metas</strong><span>Zera somente o realizado; mantém alvos e prazos.</span></div>
@@ -2212,10 +2110,6 @@
         toast('Predefinição apagada.');
       };
     });
-    $('#motionToggle').onchange = (event) => { state.settings.motion = event.target.checked; applyAppearance(); save(); };
-    $('#hapticToggle').onchange = (event) => { state.settings.haptics = event.target.checked; save(); haptic('select'); };
-    $('#swipeLeft').onchange = (event) => { state.settings.swipeLeft = event.target.value; save(); };
-    $('#swipeRight').onchange = (event) => { state.settings.swipeRight = event.target.value; save(); };
     $('#notificationToggle').onchange = async (event) => {
       if (!event.target.checked) {
         state.settings.notificationsEnabled = false;
@@ -2234,18 +2128,7 @@
       startNotificationClock();
       toast(permission === 'granted' ? 'Lembretes ativados neste aparelho.' : 'Permissão de notificação não concedida.');
     };
-    $('#restoreRoutineBtn').onclick = () => {
-      if (!confirm('Restaurar a rotina planejada? Tarefas pessoais não serão apagadas.')) return;
-      state.tasks = state.tasks.filter((task) => !task.routine);
-      state.tasks.push(...seedRoutine());
-      state.settings.routineVersion = ROUTINE_VERSION;
-      save();
-      render();
-      closeModal();
-      toast('Rotina recorrente restaurada.');
-    };
     $('#exportBtn').onclick = exportBackup;
-    $('#canvasDiagnosticBtn').onclick = startCanvasDiagnostic;
     $('#importBtn').onclick = () => $('#importFile').click();
     $('#importFile').onchange = async (event) => {
       const file = event.target.files?.[0];
@@ -2625,10 +2508,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '25');
+      freshUrl.searchParams.set('build', '26');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=25').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=26').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
@@ -2648,9 +2531,6 @@
     projectForTask,
     setView,
     selectPlannerDate,
-    startCanvasDiagnostic,
-    setCanvasDiagnosticStage,
-    stopCanvasDiagnostic,
     syncSystemDay,
     applyCloudState(input) {
       const currentView = state.view;

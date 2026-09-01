@@ -260,27 +260,30 @@
     const button = document.querySelector('#cloudAccountBtn');
     const pushCopy = document.querySelector('#pushStatusCopy');
     const pushButton = document.querySelector('#pushServerBtn');
-    if (!copy || !button) return;
     if (!configured()) {
-      copy.textContent = 'A estrutura segura está pronta; falta finalizar o projeto do servidor.';
-      button.textContent = 'Pendente';
-      button.disabled = true;
+      if (copy) copy.textContent = 'A estrutura segura está pronta; falta finalizar o projeto do servidor.';
+      if (button) {
+        button.textContent = 'Pendente';
+        button.disabled = true;
+      }
       if (pushCopy) pushCopy.textContent = 'Aguardando a ativação do servidor.';
       if (pushButton) pushButton.disabled = true;
       return;
     }
-    button.disabled = false;
-    if (runtime.error) copy.textContent = runtime.error;
-    else if (runtime.session) copy.textContent = `Sincronizado como ${runtime.session.user.email || 'conta Google conectada'}.`;
-    else copy.textContent = 'Entre com a mesma conta Google no celular e no computador.';
-    if (runtime.session) {
-      button.className = 'soft-button';
-      button.textContent = runtime.syncing ? 'Sincronizando…' : 'Sincronizar';
-      button.setAttribute('aria-label', button.textContent);
-    } else {
-      button.className = 'google-signin-button';
-      button.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4L15.4 17c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-4V7.4H3.2a10 10 0 0 0 0 9.2L6.5 14Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.2 7.4L6.5 10A5.8 5.8 0 0 1 12 6Z"/></svg><span>Continuar com Google</span>';
-      button.setAttribute('aria-label', 'Continuar com Google');
+    if (copy && button) {
+      button.disabled = false;
+      if (runtime.error) copy.textContent = runtime.error;
+      else if (runtime.session) copy.textContent = `Sincronizado como ${runtime.session.user.email || 'conta Google conectada'}.`;
+      else copy.textContent = 'Entre com a mesma conta Google no celular e no computador.';
+      if (runtime.session) {
+        button.className = 'soft-button';
+        button.textContent = runtime.syncing ? 'Sincronizando…' : 'Sincronizar';
+        button.setAttribute('aria-label', button.textContent);
+      } else {
+        button.className = 'google-signin-button';
+        button.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4L15.4 17c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-4V7.4H3.2a10 10 0 0 0 0 9.2L6.5 14Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.2 7.4L6.5 10A5.8 5.8 0 0 1 12 6Z"/></svg><span>Continuar com Google</span>';
+        button.setAttribute('aria-label', 'Continuar com Google');
+      }
     }
     if (pushCopy && pushButton) {
       const active = await refreshPushState();
@@ -293,31 +296,35 @@
   function bindSettings() {
     const accountButton = document.querySelector('#cloudAccountBtn');
     const pushButton = document.querySelector('#pushServerBtn');
-    if (!accountButton || !pushButton) return;
-    accountButton.onclick = async () => {
-      if (runtime.session) {
-        await uploadState(api()?.getState?.(), { force: true });
-      } else {
-        accountButton.disabled = true;
-        try {
-          await beginGoogleLogin(accountButton);
-        } catch (error) {
-          accountButton.disabled = false;
-          setRuntimeStatus({ error: error.message || 'Não foi possível entrar com o Google.' });
+    if (accountButton) {
+      accountButton.onclick = async () => {
+        if (runtime.session) {
+          await uploadState(api()?.getState?.(), { force: true });
+        } else {
+          accountButton.disabled = true;
+          try {
+            await beginGoogleLogin(accountButton);
+          } catch (error) {
+            accountButton.disabled = false;
+            setRuntimeStatus({ error: error.message || 'Não foi possível entrar com o Google.' });
+          }
         }
-      }
-    };
-    pushButton.onclick = async () => {
-      pushButton.disabled = true;
-      try {
-        await enablePush();
-        pushButton.textContent = 'Ativo';
-        document.querySelector('#pushStatusCopy').textContent = 'Alertas únicos: 30 minutos antes e exatamente no horário.';
-      } catch (error) {
-        pushButton.disabled = false;
-        document.querySelector('#pushStatusCopy').textContent = error.message || 'Não foi possível ativar o push.';
-      }
-    };
+      };
+    }
+    if (pushButton) {
+      pushButton.onclick = async () => {
+        pushButton.disabled = true;
+        const pushCopy = document.querySelector('#pushStatusCopy');
+        try {
+          await enablePush();
+          pushButton.textContent = 'Ativo';
+          if (pushCopy) pushCopy.textContent = 'Alertas únicos: 30 minutos antes e exatamente no horário.';
+        } catch (error) {
+          pushButton.disabled = false;
+          if (pushCopy) pushCopy.textContent = error.message || 'Não foi possível ativar o push.';
+        }
+      };
+    }
     refreshSettings();
   }
 
