@@ -3,3 +3,6 @@
 !.env.example
 supabase/.branches/
 supabase/.temp/
+private/
+*.private.json
+fluency-curriculum.private.js

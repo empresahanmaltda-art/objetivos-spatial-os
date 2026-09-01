@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const ENGINE_VERSION = 1;
+  const ENGINE_VERSION = 3;
   const DAY_MS = 86400000;
   const FORGETTING_DECAY = -.5;
   const FORGETTING_FACTOR = 19 / 81;
@@ -152,7 +152,7 @@
   }
 
   function defaultState() {
-    const items = starterItems();
+    const starter = starterItems();
     return {
       version: ENGINE_VERSION,
       profile: {
@@ -164,10 +164,10 @@
         weeklyGoal: 7,
         dailyMinutes: 75,
         startedAt: localISO(),
-        teacher: 'Nastinhary'
+        teacher: ''
       },
       settings: {
-        newPerDay: 6,
+        newPerDay: 10,
         maxReviews: 30,
         backlogShare: .2,
         requestRetention: .9,
@@ -179,17 +179,19 @@
         title: 'Diagnóstico inicial A1',
         kind: 'starter',
         status: 'ready',
-        itemCount: items.length,
+        itemCount: starter.length,
         unresolvedCount: 0,
         createdAt: Date.now(),
-        note: 'Base curta para calibrar o sistema enquanto suas aulas são importadas.'
+        note: 'Calibração curta antes de avançar pelo conteúdo das suas aulas.'
       }],
-      items,
+      items: starter,
       events: [],
       sessions: [],
       activeSession: null,
       streak: { current: 0, best: 0, lastStudyDate: '' },
-      importedLessonIds: []
+      curriculumLessons: [],
+      importedLessonIds: [],
+      curriculumVersion: 0
     };
   }
 
@@ -212,6 +214,8 @@
     return {
       id: String(input.id || uid('fluency-card')).slice(0, 100),
       sourceId: String(input.sourceId || 'manual').slice(0, 100),
+      lessonId: String(input.lessonId || '').slice(0, 100),
+      unitTitle: String(input.unitTitle || '').trim().slice(0, 160),
       order: Number(input.order) || index,
       level: VALID_LEVELS.includes(input.level) ? input.level : 'A1',
       focusWord: String(input.focusWord || '').trim().slice(0, 160),
@@ -252,6 +256,36 @@
     };
   }
 
+  function sanitizeLesson(input = {}, index = 0) {
+    const explicitNumber = Number(input.number) || Number(String(input.id || '').match(/\d+/)?.[0]) || index + 1;
+    return {
+      id: String(input.id || `l${String(explicitNumber).padStart(2, '0')}`).slice(0, 100),
+      number: Math.max(1, explicitNumber),
+      title: String(input.title || `Aula ${explicitNumber}`).trim().slice(0, 160),
+      date: /^\d{4}-\d{2}-\d{2}$/.test(String(input.date || '')) ? String(input.date) : '',
+      summary: String(input.summary || '').trim().slice(0, 700),
+      externalUrl: String(input.externalUrl || '').trim().slice(0, 1200),
+      pageCount: Math.max(0, Number(input.pageCount) || 0)
+    };
+  }
+
+  function curriculumLessonsFrom(input = {}, items = []) {
+    const stored = Array.isArray(input.curriculumLessons)
+      ? input.curriculumLessons.slice(0, 1000).map(sanitizeLesson)
+      : [];
+    const byId = new Map(stored.map((lesson) => [lesson.id, lesson]));
+    items.filter((item) => item.lessonId).forEach((item) => {
+      if (byId.has(item.lessonId)) return;
+      const number = Number(String(item.lessonId).match(/\d+/)?.[0]) || Math.floor(Math.max(0, Number(item.order) || 0) / 100) || byId.size + 1;
+      byId.set(item.lessonId, sanitizeLesson({
+        id: item.lessonId,
+        number,
+        title: item.unitTitle || `Aula ${number}`
+      }, byId.size));
+    });
+    return [...byId.values()].sort((a, b) => a.number - b.number || a.id.localeCompare(b.id));
+  }
+
   function sanitizeState(input) {
     const base = defaultState();
     if (!input || typeof input !== 'object') return base;
@@ -268,8 +302,10 @@
     settings.maxReviews = clamp(Number(settings.maxReviews) || 30, 5, 120);
     settings.backlogShare = clamp(Number(settings.backlogShare) || .2, .05, .5);
     settings.requestRetention = clamp(Number(settings.requestRetention) || .9, .8, .97);
-    const items = Array.isArray(input.items) ? input.items.slice(0, 5000).map(sanitizeItem).filter((item) => item.targetPhrase && item.nativeTranslation) : base.items;
-    const sources = Array.isArray(input.sources) && input.sources.length ? input.sources.slice(0, 500).map(sanitizeSource) : base.sources;
+    let items = Array.isArray(input.items) ? input.items.slice(0, 5000).map(sanitizeItem).filter((item) => item.targetPhrase && item.nativeTranslation) : base.items;
+    let sources = Array.isArray(input.sources) && input.sources.length ? input.sources.slice(0, 500).map(sanitizeSource) : base.sources;
+    const curriculumLessons = curriculumLessonsFrom(input, items);
+    const storedCurriculumVersion = Math.max(0, Number(input.curriculumVersion) || 0);
     return {
       ...base,
       ...input,
@@ -278,11 +314,16 @@
       settings,
       sources,
       items,
+      curriculumLessons,
       events: Array.isArray(input.events) ? input.events.slice(-3000) : [],
       sessions: Array.isArray(input.sessions) ? input.sessions.slice(-365) : [],
       activeSession: input.activeSession && typeof input.activeSession === 'object' ? input.activeSession : null,
       streak: { ...base.streak, ...(input.streak || {}) },
-      importedLessonIds: Array.isArray(input.importedLessonIds) ? [...new Set(input.importedLessonIds.map(String))].slice(0, 1000) : []
+      importedLessonIds: [...new Set([
+        ...(Array.isArray(input.importedLessonIds) ? input.importedLessonIds.map(String) : []),
+        ...curriculumLessons.map((lesson) => lesson.id)
+      ])].slice(0, 1000),
+      curriculumVersion: storedCurriculumVersion
     };
   }
 
@@ -309,30 +350,77 @@
   function buildSession(input, { date = localISO(), minutes = 75 } = {}) {
     const state = sanitizeState(input);
     const available = state.items.filter((item) => !item.suspended);
-    const newItems = available.filter((item) => item.scheduling.state === 'new').sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+    const privateLessonIds = [...new Set(available.map((item) => item.lessonId).filter(Boolean))];
+    const lessonNumber = (lessonId) => state.curriculumLessons.find((lesson) => lesson.id === lessonId)?.number
+      || Number(String(lessonId).match(/\d+/)?.[0]) || 0;
+    const newestLessonIds = privateLessonIds.slice().sort((a, b) => lessonNumber(b) - lessonNumber(a) || b.localeCompare(a));
+    const curriculumRank = new Map(newestLessonIds.map((lessonId, index) => [lessonId, index]));
+    const courseOrder = (item) => {
+      const lessonRank = curriculumRank.get(item.lessonId) ?? newestLessonIds.length;
+      const positionInLesson = Math.max(0, Number(item.order) % 100 - 1);
+      return positionInLesson * Math.max(1, newestLessonIds.length) + lessonRank;
+    };
+    const newItems = available.filter((item) => item.scheduling.state === 'new').sort((a, b) => {
+      const aCourse = Boolean(a.lessonId);
+      const bCourse = Boolean(b.lessonId);
+      if (aCourse && bCourse) return courseOrder(a) - courseOrder(b);
+      if (aCourse !== bCourse) return aCourse ? 1 : -1;
+      return b.createdAt - a.createdAt || a.order - b.order;
+    });
     const reviewItems = available.filter((item) => item.scheduling.state !== 'new' && item.scheduling.due <= date);
     const backlog = reviewItems.filter((item) => item.scheduling.due < date).sort((a, b) => a.scheduling.due.localeCompare(b.scheduling.due));
     const dueToday = reviewItems.filter((item) => item.scheduling.due === date).sort((a, b) => a.scheduling.difficulty - b.scheduling.difficulty);
     const capacity = clamp(Math.round(Number(minutes || 75) * .45), 10, state.settings.maxReviews);
     const backlogLimit = Math.max(1, Math.round(capacity * state.settings.backlogShare));
+    const plannedCount = Math.min(capacity, reviewItems.length + Math.min(state.settings.newPerDay, newItems.length));
+    const latestLessonId = newestLessonIds[0] || '';
+    const latestLessonItems = latestLessonId ? available.filter((item) => item.lessonId === latestLessonId) : [];
+    const shortWarmup = Number(minutes) <= 15;
+    const latestLessonQuota = Math.min(
+      latestLessonItems.length,
+      Math.max(shortWarmup ? 4 : 3, Math.round(Math.max(1, plannedCount) * (shortWarmup ? .4 : .3)))
+    );
     const chosen = [];
-    chosen.push(...backlog.slice(0, backlogLimit));
-    chosen.push(...dueToday.slice(0, Math.max(0, capacity - chosen.length)));
-    const newLimit = Math.min(state.settings.newPerDay, Math.max(0, capacity - chosen.length));
-    chosen.push(...newItems.slice(0, newLimit));
+    const selectedIds = new Set();
+    const addUnique = (candidates, limit) => {
+      let added = 0;
+      for (const item of candidates) {
+        if (added >= limit || chosen.length >= capacity) break;
+        if (selectedIds.has(item.id)) continue;
+        selectedIds.add(item.id);
+        chosen.push(item);
+        added += 1;
+      }
+      return added;
+    };
+    const latestNonBacklog = latestLessonItems
+      .filter((item) => item.scheduling.state === 'new' || item.scheduling.due >= date)
+      .sort((a, b) => {
+        const rank = (item) => item.scheduling.state !== 'new' && item.scheduling.due === date ? 0 : item.scheduling.state === 'new' ? 1 : 2;
+        return rank(a) - rank(b)
+          || retrievability(a.scheduling, date) - retrievability(b.scheduling, date)
+          || a.order - b.order;
+      });
+    const latestBacklog = latestLessonItems
+      .filter((item) => item.scheduling.state !== 'new' && item.scheduling.due < date)
+      .sort((a, b) => a.scheduling.due.localeCompare(b.scheduling.due));
+    const anchoredFresh = addUnique(latestNonBacklog, latestLessonQuota);
+    const anchorGap = Math.max(0, latestLessonQuota - anchoredFresh);
+    addUnique(latestBacklog, Math.min(anchorGap, backlogLimit));
+    const anchoredBacklog = chosen.filter((item) => item.scheduling.state !== 'new' && item.scheduling.due < date).length;
+    addUnique(backlog, Math.max(0, backlogLimit - anchoredBacklog));
+    addUnique(dueToday, Math.max(0, capacity - chosen.length));
+    const selectedNew = chosen.filter((item) => item.scheduling.state === 'new').length;
+    const newLimit = Math.min(Math.max(0, state.settings.newPerDay - selectedNew), Math.max(0, capacity - chosen.length));
+    addUnique(newItems, newLimit);
     if (!chosen.length) {
-      chosen.push(...available.slice().sort((a, b) => a.scheduling.due.localeCompare(b.scheduling.due)).slice(0, Math.min(6, capacity)));
+      addUnique(available.slice().sort((a, b) => a.scheduling.due.localeCompare(b.scheduling.due)), Math.min(6, capacity));
     }
-    const seen = new Set();
-    const queue = chosen.filter((item) => {
-      if (seen.has(item.id)) return false;
-      seen.add(item.id);
-      return true;
-    }).map((item) => ({ itemId: item.id, mode: modeForItem(item), retry: false }));
+    const queue = chosen.map((item) => ({ itemId: item.id, mode: modeForItem(item), retry: false }));
     return {
       id: uid('fluency-session'),
       date,
-      targetMinutes: clamp(Number(minutes) || state.profile.dailyMinutes, 15, 240),
+      targetMinutes: clamp(Number(minutes) || state.profile.dailyMinutes, 10, 240),
       startedAt: new Date().toISOString(),
       index: 0,
       queue,
@@ -375,6 +463,8 @@
       interval = intervalForRetention(stability, requestRetention);
       difficulty = clamp(difficulty + ({ 2: .2, 3: -.15, 4: -.45 }[value] || 0), 1, 10);
     }
+    const nonLatinFirstHours = /[\u0400-\u04ff]/u.test(item.targetPhrase) && previous.reps < 2 && interval > 0 && interval <= 4;
+    if (nonLatinFirstHours) interval = Math.max(1, Math.round(interval * .8));
     item.scheduling = {
       state: value === 1 ? 'relearning' : interval <= 2 ? 'learning' : 'review',
       due: addDays(date, interval),
@@ -471,6 +561,35 @@
     return { newCount, dueCount: due.length, backlog, total: active.length, mature: active.filter((item) => item.scheduling.state === 'review').length };
   }
 
+  function itemMastery(item) {
+    const scheduling = sanitizeScheduling(item?.scheduling);
+    if (scheduling.state === 'new' || !scheduling.reps) return 0;
+    if (scheduling.state === 'relearning') return clamp(18 + scheduling.reps * 3 - scheduling.lapses * 4, 10, 48);
+    if (scheduling.state === 'learning') return clamp(28 + scheduling.reps * 10, 28, 58);
+    return clamp(Math.round(50 + scheduling.reps * 6 + Math.log2(1 + scheduling.stability) * 8 - scheduling.lapses * 5), 45, 100);
+  }
+
+  function curriculumProgress(input) {
+    const state = sanitizeState(input);
+    if (!state.curriculumLessons.length) return { lessons: [], current: null, overall: 0, mastered: 0, focusLessons: [] };
+    const lessons = state.curriculumLessons.map((lesson) => {
+      const items = state.items.filter((item) => item.lessonId === lesson.id && !item.suspended);
+      const mastery = items.length ? Math.round(items.reduce((sum, item) => sum + itemMastery(item), 0) / items.length) : 0;
+      const reviewed = items.filter((item) => item.scheduling.reps > 0).length;
+      return { ...lesson, itemCount: items.length, reviewed, mastery, status: 'mapped' };
+    });
+    const focusLessons = lessons.filter((lesson) => lesson.mastery < 75).sort((a, b) => a.mastery - b.mastery || b.number - a.number);
+    const current = focusLessons[0] || lessons[lessons.length - 1];
+    const next = focusLessons[1] || null;
+    const currentIndex = lessons.findIndex((lesson) => lesson.id === current.id);
+    lessons.forEach((lesson) => {
+      lesson.status = lesson.mastery >= 75 ? 'mastered' : lesson.id === current.id ? 'current' : lesson.id === next?.id ? 'next' : 'mapped';
+    });
+    const mastered = lessons.filter((lesson) => lesson.mastery >= 75).length;
+    const overall = Math.round(lessons.reduce((sum, lesson) => sum + lesson.mastery, 0) / lessons.length);
+    return { lessons, current, currentIndex, focusLessons, overall, mastered };
+  }
+
   globalThis.FluencyEngine = Object.freeze({
     ENGINE_VERSION,
     VALID_LEVELS,
@@ -486,6 +605,7 @@
     sanitizeState,
     sanitizeItem,
     sanitizeSource,
+    sanitizeLesson,
     buildSession,
     scheduleReview,
     retrievability,
@@ -495,6 +615,7 @@
     promptFor,
     parseImportedText,
     dueSummary,
+    curriculumProgress,
     clone,
     uid
   });
