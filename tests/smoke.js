@@ -198,10 +198,10 @@ assert(appSource.includes("root.dataset.update = quiet ? 'quiet' : 'animated'"),
 assert(indexSource.includes('id="authGate"'), 'login gate missing');
 assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing');
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
-assert(indexSource.includes('fluency-curriculum.js?v=28'), 'Private-course curriculum must load before the engine');
-assert(indexSource.indexOf('fluency-curriculum.js?v=28') < indexSource.indexOf('fluency-engine.js?v=28'), 'Curriculum must load before the Fluency engine');
-assert(swSource.includes("'./fluency-curriculum.js?v=28'"), 'Private-course curriculum must be available offline');
-assert(swSource.includes("'./fluency-engine.js?v=28'"), 'Fluency engine must be available offline');
+assert(indexSource.includes('fluency-curriculum.js?v=29'), 'Private-course curriculum must load before the engine');
+assert(indexSource.indexOf('fluency-curriculum.js?v=29') < indexSource.indexOf('fluency-engine.js?v=29'), 'Curriculum must load before the Fluency engine');
+assert(swSource.includes("'./fluency-curriculum.js?v=29'"), 'Private-course curriculum must be available offline');
+assert(swSource.includes("'./fluency-engine.js?v=29'"), 'Fluency engine must be available offline');
 assert(fluencyFunctionSource.includes("text: { format: { type: 'json_schema'"), 'AI output must use strict Structured Outputs');
 assert(fluencyFunctionSource.includes("supabase.auth.getUser()"), 'Fluency AI must authenticate the current user');
 assert(fluencyFunctionSource.includes("store: false"), 'AI material processing must not retain model responses by default');
@@ -453,13 +453,13 @@ assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mo
 assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
 assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
-assert(indexSource.includes('styles.css?v=28') && indexSource.includes('app.js?v=28') && indexSource.includes('cloud-sync.js?v=28'), 'v28 asset cache keys missing');
-assert(swSource.includes("objetivos-spatial-v28"), 'v28 service-worker cache missing');
+assert(indexSource.includes('styles.css?v=29') && indexSource.includes('app.js?v=29') && indexSource.includes('cloud-sync.js?v=29'), 'v29 asset cache keys missing');
+assert(swSource.includes("objetivos-spatial-v29"), 'v29 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
-assert(appSource.includes("freshUrl.searchParams.set('build', '28')"), 'PWA refresh must point to build 28');
-assert(appSource.includes("serviceWorker.register('./sw.js?v=28')"), 'PWA must register the build 28 service worker');
+assert(appSource.includes("freshUrl.searchParams.set('build', '29')"), 'PWA refresh must point to build 29');
+assert(appSource.includes("serviceWorker.register('./sw.js?v=29')"), 'PWA must register the build 29 service worker');
 assert(swSource.includes("fetch(event.request, { cache: 'no-store' })"), 'PWA navigation must bypass stale iOS caches');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
 ['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {

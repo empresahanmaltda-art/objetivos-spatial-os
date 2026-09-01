@@ -3065,10 +3065,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '28');
+      freshUrl.searchParams.set('build', '29');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=28').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=29').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {
