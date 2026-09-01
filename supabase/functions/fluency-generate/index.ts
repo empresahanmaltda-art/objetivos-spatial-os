@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from 'npm:@supabase/supabase-js@2.95.0'
 
 type GenerateInput = {
   sourceId?: string
@@ -16,8 +16,13 @@ const MAX_FILE = 12 * 1024 * 1024
 const LEVELS = new Set(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'])
 
 function publishableKey() {
-  const modern = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') || '{}')
-  return modern.default || Deno.env.get('SUPABASE_ANON_KEY') || ''
+  try {
+    const modern = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') || '{}')
+    if (typeof modern.default === 'string' && modern.default) return modern.default
+  } catch {
+    // Older projects expose only SUPABASE_ANON_KEY.
+  }
+  return Deno.env.get('SUPABASE_ANON_KEY') || ''
 }
 
 function allowedOrigin(request: Request) {
@@ -119,8 +124,7 @@ Regras pedagógicas:
 - Se o material não tiver conteúdo linguístico suficiente, use status needs_input, explique no summary e devolva cards vazio.
 - A saída deve obedecer estritamente ao JSON Schema.`
 
-export default {
-  async fetch(request: Request) {
+Deno.serve(async (request: Request) => {
     const origin = allowedOrigin(request)
     if (!origin) return new Response('Origin not allowed', { status: 403 })
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: headers(origin) })
@@ -204,5 +208,4 @@ export default {
     } catch {
       return json(origin, { error: 'A resposta estruturada não pôde ser lida.' }, 502)
     }
-  }
-}
+})

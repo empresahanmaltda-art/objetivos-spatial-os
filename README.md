@@ -25,13 +25,16 @@ Aplicativo pessoal de execução diária: tarefas, projetos, metas com prazo e a
 - Aba Fluency com perfil CEFR por habilidade, fila adaptativa e histórico de sessões.
 - Currículos autenticados permanecem no estado privado de cada usuário e nunca são incluídos no repositório nem no pacote público do PWA.
 - Visão de progresso por aula: conteúdo apenas visto não conta como dominado; a consolidação cresce com recuperação ativa espaçada.
+- A aula mais recente é sempre a aula atual: ocupa de 50% a 60% do aquecimento enquanto ainda está fraca, sem abandonar a revisão acumulativa das anteriores.
+- Terça e quinta têm um único aquecimento pré-aula; depois de concluído, o painel volta ao treino normal do dia.
 - Cinco formas de recuperação: reconhecimento, produção escrita, lacuna, ditado e shadowing.
 - Estado de memória por cartão com dificuldade, estabilidade, recuperabilidade e retenção-alvo de 90%.
+- Autoavaliação em três escolhas claras: Difícil (repete e volta logo), Bom (intervalo cresce) e Fácil (manutenção).
 - Proteção contra acúmulo: no máximo 20% da sessão vem do backlog atrasado.
 - Comparação Unicode tolerante a pequenos erros e à diferença entre `е` e `ё`.
 - Voz russa nativa do aparelho e explicações de gramática, estrutura, pronúncia e associação mental.
 - Importação preservada de texto e PDF; materiais privados ficam isolados por usuário.
-- Geração por IA autenticada no servidor com Responses API e Structured Outputs estrito.
+- Pipeline opcional de IA preparado para Responses API e Structured Outputs estrito, com ativação separada do currículo privado.
 
 ## Executar localmente
 
@@ -49,7 +52,7 @@ No iPhone, notificações com o app fechado exigem instalar o site na Tela de In
 
 ## Fluency inteligente
 
-O motor local fica em `fluency-engine.js` e continua funcionando offline depois que o usuário autenticado sincroniza seu estado. Currículos e links particulares vivem apenas no registro protegido por RLS no Supabase. O enriquecimento de materiais fica em `supabase/functions/fluency-generate`: a chave da OpenAI nunca entra no PWA. A função autentica o usuário, baixa somente arquivos do caminho privado dele, trata o conteúdo como dado não confiável e devolve até 30 cartões em JSON estrito.
+O motor local fica em `fluency-engine.js` e continua funcionando offline depois que o usuário autenticado sincroniza seu estado. Currículos e links particulares vivem apenas no registro protegido por RLS no Supabase. O enriquecimento opcional de materiais fica em `supabase/functions/fluency-generate`: a chave da OpenAI nunca entra no PWA. Quando ativada conscientemente, a função autentica o usuário, baixa somente arquivos do caminho privado dele, trata o conteúdo como dado não confiável e devolve até 30 cartões em JSON estrito usando `store: false`.
 
 Para ativar o pipeline em um projeto Supabase já vinculado:
 

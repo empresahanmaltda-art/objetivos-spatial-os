@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const ENGINE_VERSION = 3;
+  const ENGINE_VERSION = 4;
   const DAY_MS = 86400000;
   const FORGETTING_DECAY = -.5;
   const FORGETTING_FACTOR = 19 / 81;
@@ -88,7 +88,7 @@
         verdict: yoDifference ? 'minor' : 'exact',
         distance: 0,
         score: yoDifference ? .96 : 1,
-        suggestedRating: yoDifference ? 2 : 3,
+        suggestedRating: yoDifference ? 1 : 2,
         note: yoDifference ? 'Resposta certa; atenção apenas ao uso de е/ё.' : 'Resposta exata.'
       };
     }
@@ -104,7 +104,7 @@
       verdict: minor ? 'minor' : 'wrong',
       distance,
       score,
-      suggestedRating: minor ? 2 : 1,
+      suggestedRating: 1,
       note: minor ? 'Quase certo: há um pequeno erro de escrita.' : 'A estrutura ainda precisa ser recuperada novamente.'
     };
   }
@@ -376,9 +376,15 @@
     const latestLessonId = newestLessonIds[0] || '';
     const latestLessonItems = latestLessonId ? available.filter((item) => item.lessonId === latestLessonId) : [];
     const shortWarmup = Number(minutes) <= 15;
+    const latestLessonMastery = latestLessonItems.length
+      ? Math.round(latestLessonItems.reduce((sum, item) => sum + itemMastery(item), 0) / latestLessonItems.length)
+      : 0;
+    const latestLessonShare = shortWarmup
+      ? (latestLessonMastery < 75 ? .6 : .5)
+      : latestLessonMastery < 40 ? .6 : latestLessonMastery < 75 ? .5 : .35;
     const latestLessonQuota = Math.min(
       latestLessonItems.length,
-      Math.max(shortWarmup ? 4 : 3, Math.round(Math.max(1, plannedCount) * (shortWarmup ? .4 : .3)))
+      Math.max(shortWarmup ? 5 : 4, Math.round(Math.max(1, plannedCount) * latestLessonShare))
     );
     const chosen = [];
     const selectedIds = new Set();
@@ -439,14 +445,14 @@
   function scheduleReview(itemInput, rating, date = localISO(), requestRetention = .9) {
     const item = sanitizeItem(itemInput);
     const previous = item.scheduling;
-    const value = clamp(Number(rating) || 1, 1, 4);
+    const value = clamp(Number(rating) || 1, 1, 3);
     const firstReview = previous.reps === 0;
     let interval;
     let stability = previous.stability;
     let difficulty = previous.difficulty;
     if (firstReview) {
-      interval = [0, 1, 2, 4][value - 1];
-      stability = [.35, .8, 2.2, 4.5][value - 1];
+      interval = [1, 2, 4][value - 1];
+      stability = [.35, 2.2, 4.5][value - 1];
     } else if (value === 1) {
       interval = 1;
       const recall = retrievability(previous, date);
@@ -454,14 +460,14 @@
       difficulty = clamp(previous.difficulty + .8, 1, 10);
     } else {
       const recall = retrievability(previous, date);
-      const gradeGain = { 2: .42, 3: .95, 4: 1.55 }[value];
+      const gradeGain = { 2: .95, 3: 1.55 }[value];
       const difficultyFactor = clamp(1.35 - difficulty * .065, .55, 1.25);
       const stabilizationDecay = clamp(Math.pow(Math.max(previous.stability, .2), -.18), .36, 1.34);
       const desirableDifficulty = 1 + (1 - recall) * 1.7;
       const gain = gradeGain * difficultyFactor * stabilizationDecay * desirableDifficulty;
       stability = clamp(previous.stability * (1 + gain), .5, 3650);
       interval = intervalForRetention(stability, requestRetention);
-      difficulty = clamp(difficulty + ({ 2: .2, 3: -.15, 4: -.45 }[value] || 0), 1, 10);
+      difficulty = clamp(difficulty + ({ 2: -.15, 3: -.45 }[value] || 0), 1, 10);
     }
     const nonLatinFirstHours = /[\u0400-\u04ff]/u.test(item.targetPhrase) && previous.reps < 2 && interval > 0 && interval <= 4;
     if (nonLatinFirstHours) interval = Math.max(1, Math.round(interval * .8));
@@ -495,7 +501,13 @@
     return Object.fromEntries(skills.map((skill) => {
       const events = recent.filter((event) => (event.skill || MODE_SKILLS[event.mode]) === skill);
       if (!events.length) return [skill, { score: 0, reviews: 0, level: state.profile.skillLevels[skill] || 'A1' }];
-      const weighted = events.reduce((sum, event, index) => sum + (Number(event.rating) || 1) / 4 * (1 + index / Math.max(events.length, 1)), 0);
+      const weighted = events.reduce((sum, event, index) => {
+        const rating = Number(event.rating) || 1;
+        const quality = Number(event.ratingScale) === 3
+          ? ({ 1: .25, 2: .8, 3: 1 }[clamp(rating, 1, 3)] || .25)
+          : clamp(rating, 1, 4) / 4;
+        return sum + quality * (1 + index / Math.max(events.length, 1));
+      }, 0);
       const weights = events.reduce((sum, _event, index) => sum + (1 + index / Math.max(events.length, 1)), 0);
       return [skill, { score: Math.round(weighted / weights * 100), reviews: events.length, level: state.profile.skillLevels[skill] || 'A1' }];
     }));
@@ -578,12 +590,15 @@
       const reviewed = items.filter((item) => item.scheduling.reps > 0).length;
       return { ...lesson, itemCount: items.length, reviewed, mastery, status: 'mapped' };
     });
-    const focusLessons = lessons.filter((lesson) => lesson.mastery < 75).sort((a, b) => a.mastery - b.mastery || b.number - a.number);
-    const current = focusLessons[0] || lessons[lessons.length - 1];
-    const next = focusLessons[1] || null;
+    const current = lessons[lessons.length - 1];
+    const earlierGaps = lessons
+      .filter((lesson) => lesson.id !== current.id && lesson.mastery < 75)
+      .sort((a, b) => a.mastery - b.mastery || b.number - a.number);
+    const focusLessons = [current, ...earlierGaps];
+    const next = earlierGaps[0] || null;
     const currentIndex = lessons.findIndex((lesson) => lesson.id === current.id);
     lessons.forEach((lesson) => {
-      lesson.status = lesson.mastery >= 75 ? 'mastered' : lesson.id === current.id ? 'current' : lesson.id === next?.id ? 'next' : 'mapped';
+      lesson.status = lesson.id === current.id ? 'current' : lesson.mastery >= 75 ? 'mastered' : lesson.id === next?.id ? 'next' : 'mapped';
     });
     const mastered = lessons.filter((lesson) => lesson.mastery >= 75).length;
     const overall = Math.round(lessons.reduce((sum, lesson) => sum + lesson.mastery, 0) / lessons.length);

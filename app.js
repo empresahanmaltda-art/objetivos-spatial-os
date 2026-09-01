@@ -1344,10 +1344,15 @@
     return tasksForDate(date).find((task) => normalize(task.title) === 'aula');
   }
 
+  function isFluencyClassDay(date = localISO()) {
+    const weekday = new Date(`${date}T12:00:00`).getDay();
+    return weekday === 2 || weekday === 4;
+  }
+
   function fluencyDayContext(date = localISO()) {
     const lesson = fluencyLessonTask(date);
-    if (!lesson) return 'Revisão, aquisição e produção guiada';
-    return `Dia de aula · ${lesson.time} · preparação + consolidação`;
+    if (!lesson && !isFluencyClassDay(date)) return 'Revisão, aquisição e produção guiada';
+    return `Dia de aula${lesson?.time ? ` · ${lesson.time}` : ''} · preparação + consolidação`;
   }
 
   function currentFluencyEntry() {
@@ -1382,7 +1387,9 @@
     const lessonPreview = curriculum.focusLessons.slice(0, 4);
     const lessonCount = curriculum.lessons.length;
     const session = fluency.activeSession;
-    const lessonToday = Boolean(fluencyLessonTask(date));
+    const lessonToday = Boolean(fluencyLessonTask(date)) || isFluencyClassDay(date);
+    const warmupCompletedToday = fluency.sessions.some((item) => item.date === date && item.kind === 'warmup');
+    const warmupAvailable = lessonToday && !warmupCompletedToday;
     const studiedToday = fluency.events.filter((event) => event.date === date).length;
     const completedThisWeek = fluency.sessions.filter((item) => Fluency.dayDiff(item.date, date) >= 0 && Fluency.dayDiff(item.date, date) <= 6).length;
     return `
@@ -1395,12 +1402,12 @@
         <section class="fluency-hero">
           <div class="fluency-hero-copy">
             <span class="fluency-kicker">Sessão de hoje</span>
-            <h2>${session?.paused ? 'Sua sessão está pausada' : lessonToday ? 'Aqueça sua memória antes da aula' : 'Treino adaptado ao que você precisa agora'}</h2>
-            <p>${session?.paused ? `Você parou no cartão ${Math.min(session.index + 1, session.queue.length)} de ${session.queue.length}.` : lessonToday ? `Em 10 minutos, o Fluency começa pela aula mais recente${latestLesson ? ` — Aula ${latestLesson.number}` : ''} — e depois puxa fundamentos das anteriores para você chegar falando, não apenas reconhecendo.` : currentLesson ? `A aula mais recente entra em toda sessão. O restante das ${plan.queue.length} recuperações ataca suas lacunas antigas sem despejar todo o backlog de uma vez.` : `O motor escolheu ${plan.queue.length} recuperações para caber nos ${minutes} minutos da sua rotina, sem despejar todo o backlog de uma vez.`}</p>
+            <h2>${session?.paused ? 'Sua sessão está pausada' : warmupAvailable ? 'Aqueça sua memória antes da aula' : lessonToday ? 'Continue consolidando depois da aula' : 'Treino adaptado ao que você precisa agora'}</h2>
+            <p>${session?.paused ? `Você parou no cartão ${Math.min(session.index + 1, session.queue.length)} de ${session.queue.length}.` : warmupAvailable ? `Em 10 minutos, o Fluency começa pela aula mais recente${latestLesson ? ` — Aula ${latestLesson.number}` : ''} — e depois puxa fundamentos das anteriores para você chegar falando, não apenas reconhecendo.` : currentLesson ? `A aula mais recente entra em toda sessão. O restante das ${plan.queue.length} recuperações ataca suas lacunas antigas sem despejar todo o backlog de uma vez.` : `O motor escolheu ${plan.queue.length} recuperações para caber nos ${minutes} minutos da sua rotina, sem despejar todo o backlog de uma vez.`}</p>
             <div class="fluency-hero-actions">
               ${session?.paused
                 ? '<button class="primary-button fluency-start" data-action="resumeFluency" type="button">Continuar sessão</button>'
-                : lessonToday
+                : warmupAvailable
                   ? `<button class="primary-button fluency-start" data-action="startFluencyQuick" type="button">Aquecer · 10 min</button><button class="soft-button" data-action="startFluency" type="button">Treino completo · ${minutes} min</button>`
                   : '<button class="primary-button fluency-start" data-action="startFluency" type="button">Começar treino</button><button class="soft-button" data-action="speakFluencySample" type="button">▶ Testar voz russa</button>'}
             </div>
@@ -1423,7 +1430,7 @@
           <div class="fluency-course-summary">
             <div class="fluency-course-number">${String(currentLesson.number).padStart(2, '0')}</div>
             <div class="fluency-course-copy">
-              <small>Lacuna prioritária · Aula ${currentLesson.number}</small>
+              <small>Aula atual · Canva completo · Aula ${currentLesson.number}</small>
               <strong>${esc(currentLesson.title)}</strong>
               <p>${esc(currentLesson.summary || 'Conteúdo particular sincronizado com segurança.')}</p>
               <div class="fluency-course-track"><i style="width:${currentLesson.mastery}%"></i></div>
@@ -1489,7 +1496,7 @@
     const expected = entry.mode === 'cloze' ? item.focusWord : item.targetPhrase;
     const comparison = session.comparison;
     const verdictClass = comparison?.verdict || '';
-    const recommended = Number(comparison?.suggestedRating) || 3;
+    const recommended = Number(comparison?.suggestedRating) || 2;
     const audioMode = entry.mode === 'listening' || entry.mode === 'shadowing';
     return `
       <div class="view-enter fluency-session-view">
@@ -1516,9 +1523,9 @@
               ${item.wordBreakdown ? `<article><span>Por dentro da frase</span><p>${esc(item.wordBreakdown)}</p></article>` : ''}
               ${item.pronunciationTip ? `<article><span>Pronúncia</span><p>${esc(item.pronunciationTip)}</p></article>` : ''}
             </div>
-            <div class="fluency-rating-copy">Como foi recuperar sem olhar?</div>
+            <div class="fluency-rating-copy">Como foi recuperar sem olhar? O intervalo será decidido automaticamente.</div>
             <div class="fluency-rating-grid">
-              ${[[1, 'De novo'], [2, 'Difícil'], [3, 'Bom'], [4, 'Fácil']].map(([rating, label]) => `<button class="${recommended === rating ? 'recommended' : ''}" data-action="rateFluency" data-rating="${rating}" type="button"><strong>${rating}</strong><span>${label}</span></button>`).join('')}
+              ${[[1, 'Difícil', 'volta logo'], [2, 'Bom', 'intervalo cresce'], [3, 'Fácil', 'manutenção']].map(([rating, label, hint]) => `<button class="${recommended === rating ? 'recommended' : ''}" data-action="rateFluency" data-rating="${rating}" type="button" aria-label="${label}: ${hint}"><strong>${label}</strong><span>${hint}</span></button>`).join('')}
             </div>
           ` : `
             <div class="fluency-study-actions">
@@ -1536,12 +1543,13 @@
     return session && !session.paused ? renderFluencySession() : renderFluencyDashboard();
   }
 
-  function startFluencySession(minutes = fluencyStudyMinutes()) {
+  function startFluencySession(minutes = fluencyStudyMinutes(), kind = 'training') {
     const existing = state.fluency.activeSession;
     if (existing && !existing.completedAt && existing.index < existing.queue.length) {
       existing.paused = false;
     } else {
       state.fluency.activeSession = Fluency.buildSession(state.fluency, { date: localISO(), minutes });
+      state.fluency.activeSession.kind = kind === 'warmup' ? 'warmup' : 'training';
     }
     save();
     render();
@@ -1570,7 +1578,7 @@
     session.answer = answer;
     session.comparison = prompt.expectsInput
       ? Fluency.gradeAnswer(expected, answer)
-      : { verdict: 'revealed', score: 1, suggestedRating: 3, note: entry.mode === 'shadowing' ? 'Ouça novamente e avalie sua pronúncia com honestidade.' : 'Você recuperou o sentido antes de olhar?' };
+      : { verdict: 'revealed', score: 1, suggestedRating: 2, note: entry.mode === 'shadowing' ? 'Ouça novamente e avalie sua pronúncia com honestidade.' : 'Você recuperou o sentido antes de olhar?' };
     session.revealed = true;
     save();
     render({ quiet: true });
@@ -1581,13 +1589,13 @@
     const current = currentFluencyEntry();
     if (!current || !current.session.revealed) return;
     const { session, entry, item } = current;
-    const value = clamp(Number(rating) || 1, 1, 4);
+    const value = clamp(Number(rating) || 1, 1, 3);
     const updated = Fluency.scheduleReview(item, value, session.date, state.fluency.settings.requestRetention);
     const itemIndex = state.fluency.items.findIndex((candidate) => candidate.id === item.id);
     state.fluency.items[itemIndex] = updated;
     const verdict = session.comparison?.verdict || 'revealed';
-    if (verdict === 'exact' || verdict === 'revealed' && value >= 3) session.correct += 1;
-    else if (verdict === 'minor' || value === 2) session.minor += 1;
+    if (value >= 2 && (verdict === 'exact' || verdict === 'revealed')) session.correct += 1;
+    else if (value >= 2 || verdict === 'minor') session.minor += 1;
     else session.missed += 1;
     session.ratings.push(value);
     state.fluency.events.push({
@@ -1599,8 +1607,9 @@
       mode: entry.mode,
       skill: Fluency.MODE_SKILLS[entry.mode],
       rating: value,
+      ratingScale: 3,
       verdict,
-      score: Number(session.comparison?.score) || (value / 4),
+      score: Number.isFinite(Number(session.comparison?.score)) ? Number(session.comparison.score) : ({ 1: .25, 2: .8, 3: 1 }[value]),
       createdAt: new Date().toISOString()
     });
     if (value === 1 && !entry.retry) session.queue.push({ ...entry, retry: true, mode: 'recall' });
@@ -1613,6 +1622,7 @@
       state.fluency.sessions.push({
         id: session.id,
         date: session.date,
+        kind: session.kind || 'training',
         targetMinutes: session.targetMinutes,
         startedAt: session.startedAt,
         completedAt: session.completedAt,
@@ -3000,7 +3010,7 @@
         haptic('select');
       },
       startFluency: startFluencySession,
-      startFluencyQuick: () => startFluencySession(10),
+      startFluencyQuick: () => startFluencySession(10, 'warmup'),
       resumeFluency: startFluencySession,
       pauseFluency: pauseFluencySession,
       revealFluency: revealFluencyAnswer,
@@ -3078,10 +3088,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '31');
+      freshUrl.searchParams.set('build', '32');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=31').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=32').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {

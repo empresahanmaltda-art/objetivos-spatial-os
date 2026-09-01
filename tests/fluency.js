@@ -10,11 +10,11 @@ vm.runInContext(fs.readFileSync('fluency-engine.js', 'utf8'), context);
 
 const engine = context.FluencyEngine;
 assert(engine, 'Fluency engine missing');
-assert.strictEqual(engine.ENGINE_VERSION, 3);
+assert.strictEqual(engine.ENGINE_VERSION, 4);
 
 const exact = engine.gradeAnswer('Это моя книга.', 'это моя книга');
 assert.strictEqual(exact.verdict, 'exact');
-assert.strictEqual(exact.suggestedRating, 3);
+assert.strictEqual(exact.suggestedRating, 2);
 const yo = engine.gradeAnswer('Всё хорошо.', 'Все хорошо');
 assert.strictEqual(yo.verdict, 'minor');
 assert(yo.note.includes('е/ё'));
@@ -65,8 +65,8 @@ assert(calibration.queue.slice(0, 3).every((entry) => state.items.find((item) =>
 const classWarmup = engine.buildSession(state, { date: engine.localISO(), minutes: 10 });
 assert.strictEqual(classWarmup.targetMinutes, 10);
 assert.strictEqual(classWarmup.queue.length, 10);
-assert(classWarmup.queue.slice(0, 4).every((entry) => state.items.find((item) => item.id === entry.itemId)?.lessonId === 'unit-8'), 'warmup must anchor forty percent in the latest lesson');
-assert(new Set(classWarmup.queue.map((entry) => state.items.find((item) => item.id === entry.itemId)?.lessonId)).size >= 6, 'warmup must retrieve across earlier lessons');
+assert(classWarmup.queue.slice(0, 6).every((entry) => state.items.find((item) => item.id === entry.itemId)?.lessonId === 'unit-8'), 'warmup must focus sixty percent on an unconsolidated latest lesson');
+assert(new Set(classWarmup.queue.map((entry) => state.items.find((item) => item.id === entry.itemId)?.lessonId)).size >= 5, 'warmup must still retrieve across earlier lessons');
 
 const forcedLatestState = engine.sanitizeState(state);
 forcedLatestState.items.forEach((item) => {
@@ -89,14 +89,16 @@ const backlogInPlan = plan.queue.filter((entry) => state.items.find((item) => it
 assert(backlogInPlan <= 3, 'backlog must be throttled');
 
 const first = state.items[0];
-const scheduled = engine.scheduleReview(first, 3, today);
+const scheduled = engine.scheduleReview(first, 2, today);
 assert.strictEqual(scheduled.scheduling.reps, first.scheduling.reps + 1);
 assert(scheduled.scheduling.due > today);
 assert(engine.retrievability(scheduled.scheduling, today) > engine.retrievability(scheduled.scheduling, engine.addDays(today, 30)), 'retrievability must decay');
 assert(engine.intervalForRetention(12, .9) >= 11);
-const latinFirst = engine.scheduleReview(engine.sanitizeItem({ targetPhrase: 'Hello world.', nativeTranslation: 'Olá mundo.' }), 4, today);
-const cyrillicFirst = engine.scheduleReview(engine.sanitizeItem({ targetPhrase: 'Привет, мир!', nativeTranslation: 'Olá, mundo!' }), 4, today);
+const latinFirst = engine.scheduleReview(engine.sanitizeItem({ targetPhrase: 'Hello world.', nativeTranslation: 'Olá mundo.' }), 3, today);
+const cyrillicFirst = engine.scheduleReview(engine.sanitizeItem({ targetPhrase: 'Привет, мир!', nativeTranslation: 'Olá, mundo!' }), 3, today);
 assert(cyrillicFirst.scheduling.scheduledDays < latinFirst.scheduling.scheduledDays, 'early Cyrillic intervals must be shorter');
+const difficult = engine.scheduleReview(first, 1, today);
+assert.strictEqual(difficult.scheduling.due, engine.addDays(today, 1), 'difficult cards must return the next day after the same-session retry');
 
 const defaults = engine.defaultState();
 assert.strictEqual(defaults.curriculumLessons.length, 0, 'public bundle must not embed a private curriculum');

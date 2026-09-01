@@ -198,10 +198,11 @@ assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing')
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
 assert(!indexSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public page');
 assert(!swSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public cache');
-assert(indexSource.includes('fluency-engine.js?v=31'), 'Fluency engine missing from the public page');
-assert(swSource.includes("'./fluency-engine.js?v=31'"), 'Fluency engine must be available offline');
+assert(indexSource.includes('fluency-engine.js?v=32'), 'Fluency engine missing from the public page');
+assert(swSource.includes("'./fluency-engine.js?v=32'"), 'Fluency engine must be available offline');
 assert(appSource.includes("data-action=\"startFluencyQuick\""), 'class-day warmup control missing');
-assert(appSource.includes("startFluencyQuick: () => startFluencySession(10)"), 'class-day warmup must use a ten-minute plan');
+assert(appSource.includes("startFluencyQuick: () => startFluencySession(10, 'warmup')"), 'class-day warmup must use a ten-minute plan');
+assert(appSource.includes("item.kind === 'warmup'"), 'completed warmups must not reappear later on class days');
 assert(fluencyFunctionSource.includes("text: { format: { type: 'json_schema'"), 'AI output must use strict Structured Outputs');
 assert(fluencyFunctionSource.includes("supabase.auth.getUser()"), 'Fluency AI must authenticate the current user');
 assert(fluencyFunctionSource.includes("store: false"), 'AI material processing must not retain model responses by default');
@@ -360,12 +361,17 @@ assert(elements.viewRoot.innerHTML.includes('fluency-study-card'), 'active study
 api.revealFluencyAnswer();
 state = api.getState();
 assert(state.fluency.activeSession.revealed, 'recognition card should reveal without typed input');
+assert(elements.viewRoot.innerHTML.includes('Difícil'), 'three-grade review controls must include Difficult');
+assert(elements.viewRoot.innerHTML.includes('Bom'), 'three-grade review controls must include Good');
+assert(elements.viewRoot.innerHTML.includes('Fácil'), 'three-grade review controls must include Easy');
+assert(!elements.viewRoot.innerHTML.includes('De novo'), 'legacy fourth review grade must be removed');
 const firstFluencyItem = state.fluency.items.find((item) => item.id === state.fluency.activeSession.queue[0].itemId);
 const previousFluencyReps = firstFluencyItem.scheduling.reps;
 api.rateFluencyCard(3);
 state = api.getState();
 assert.strictEqual(state.fluency.items.find((item) => item.id === firstFluencyItem.id).scheduling.reps, previousFluencyReps + 1, 'rating must update spaced repetition state');
 assert.strictEqual(state.fluency.events.length, 1, 'review event history missing');
+assert.strictEqual(state.fluency.events[0].ratingScale, 3, 'review events must preserve the three-grade scale');
 api.finishFluencySession();
 api.setView('today');
 
@@ -452,13 +458,13 @@ assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mo
 assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
 assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
-assert(indexSource.includes('styles.css?v=31') && indexSource.includes('app.js?v=31') && indexSource.includes('cloud-sync.js?v=31'), 'v31 asset cache keys missing');
-assert(swSource.includes("objetivos-spatial-v31"), 'v31 service-worker cache missing');
+assert(indexSource.includes('styles.css?v=32') && indexSource.includes('app.js?v=32') && indexSource.includes('cloud-sync.js?v=32'), 'v32 asset cache keys missing');
+assert(swSource.includes("objetivos-spatial-v32"), 'v32 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
-assert(appSource.includes("freshUrl.searchParams.set('build', '31')"), 'PWA refresh must point to build 31');
-assert(appSource.includes("serviceWorker.register('./sw.js?v=31')"), 'PWA must register the build 31 service worker');
+assert(appSource.includes("freshUrl.searchParams.set('build', '32')"), 'PWA refresh must point to build 32');
+assert(appSource.includes("serviceWorker.register('./sw.js?v=32')"), 'PWA must register the build 32 service worker');
 assert(swSource.includes("fetch(event.request, { cache: 'no-store' })"), 'PWA navigation must bypass stale iOS caches');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
 ['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {
