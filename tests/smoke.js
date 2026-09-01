@@ -162,14 +162,18 @@ const context = {
 };
 context.globalThis = context;
 vm.createContext(context);
+vm.runInContext(fs.readFileSync('fluency-engine.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('app.js', 'utf8'), context);
 
 const appSource = fs.readFileSync('app.js', 'utf8');
+const fluencySource = fs.readFileSync('fluency-engine.js', 'utf8');
 const indexSource = fs.readFileSync('index.html', 'utf8');
 const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const swSource = fs.readFileSync('sw.js', 'utf8');
 const cloudSyncSource = fs.readFileSync('cloud-sync.js', 'utf8');
 const pushSource = fs.readFileSync('supabase/functions/push-due/index.ts', 'utf8');
+const fluencyFunctionSource = fs.readFileSync('supabase/functions/fluency-generate/index.ts', 'utf8');
+const fluencyMigrationSource = fs.readFileSync('supabase/migrations/202609010001_fluency_materials.sql', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 const pngDimensions = (path) => {
   const file = fs.readFileSync(path);
@@ -192,6 +196,12 @@ assert(appSource.includes("root.dataset.update = quiet ? 'quiet' : 'animated'"),
 assert(indexSource.includes('id="authGate"'), 'login gate missing');
 assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing');
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
+assert(indexSource.includes('fluency-engine.js?v=27'), 'Fluency engine must load before the app');
+assert(swSource.includes("'./fluency-engine.js?v=27'"), 'Fluency engine must be available offline');
+assert(fluencyFunctionSource.includes("text: { format: { type: 'json_schema'"), 'AI output must use strict Structured Outputs');
+assert(fluencyFunctionSource.includes("supabase.auth.getUser()"), 'Fluency AI must authenticate the current user');
+assert(fluencyFunctionSource.includes("store: false"), 'AI material processing must not retain model responses by default');
+assert(fluencyMigrationSource.includes("fluency_materials_select_own"), 'private per-user material policy missing');
 assert(manifest.icons.some((icon) => icon.src === 'assets/os-icon-v18-192.png' && icon.type === 'image/png'));
 assert(manifest.icons.some((icon) => icon.src === 'assets/os-icon-v18-512.png' && icon.purpose.includes('maskable')));
 assert.deepStrictEqual(pngDimensions('assets/os-icon-v18-180.png'), [180, 180]);
@@ -203,7 +213,7 @@ const api = window.__OBJETIVOS__;
 assert(api, 'public test API missing');
 let state = api.getState();
 
-assert.strictEqual(state.version, 5);
+assert.strictEqual(state.version, 6);
 assert.strictEqual(state.settings.theme, 'spatial');
 assert.strictEqual(state.settings.customBackground, '#302c28');
 assert.strictEqual(state.settings.customGlass, '#48423b');
@@ -218,6 +228,12 @@ assert.strictEqual(state.settings.motion, true, 'Spatial motion must stay enable
 assert.strictEqual(state.settings.defaultReminder, 30);
 assert.deepStrictEqual(state.settings.defaultReminders, [30, 0]);
 assert.strictEqual(state.settings.routineVersion, 3);
+assert.strictEqual(state.fluency.profile.targetLanguage, 'ru');
+assert.strictEqual(state.fluency.profile.overallLevel, 'A1');
+assert.strictEqual(state.fluency.profile.dailyMinutes, 75);
+assert.strictEqual(state.fluency.items.length, 8);
+assert.strictEqual(state.fluency.sources[0].id, 'starter-russian-a1');
+assert(fluencySource.includes("const VALID_MODES = ['recognition', 'recall', 'cloze', 'listening', 'shadowing']"), 'all five acquisition modes are required');
 assert.strictEqual(state.selectedProject, 'routine');
 assert(/^\d{4}-\d{2}-01$/.test(state.plannerMonth), 'planner month must be normalized');
 assert.strictEqual(state.plannerDate, '');
@@ -326,6 +342,28 @@ assert(elements.viewRoot.innerHTML.includes('planner-day-panel'), 'selected-day 
 assert(!elements.viewRoot.innerHTML.includes('class="project-browser"'), 'project list should yield to the selected-day agenda');
 api.setView('today');
 
+api.setView('fluency');
+assert.strictEqual(api.getState().view, 'fluency');
+assert(elements.viewRoot.innerHTML.includes('Mapa de fluência'), 'Fluency dashboard was not rendered');
+assert(elements.viewRoot.innerHTML.includes('Sessão de hoje'), 'daily Fluency plan missing');
+assert(elements.bottomDock.innerHTML.includes('Fluency'), 'Fluency navigation item missing');
+assert(elements.quickAdd.classList.contains('fluency-add'), 'quick add must switch to study material in Fluency');
+api.startFluencySession();
+state = api.getState();
+assert(state.fluency.activeSession?.queue?.length > 0, 'adaptive Fluency session was not created');
+assert(elements.viewRoot.innerHTML.includes('fluency-study-card'), 'active study card was not rendered');
+api.revealFluencyAnswer();
+state = api.getState();
+assert(state.fluency.activeSession.revealed, 'recognition card should reveal without typed input');
+const firstFluencyItem = state.fluency.items.find((item) => item.id === state.fluency.activeSession.queue[0].itemId);
+const previousFluencyReps = firstFluencyItem.scheduling.reps;
+api.rateFluencyCard(3);
+state = api.getState();
+assert.strictEqual(state.fluency.items.find((item) => item.id === firstFluencyItem.id).scheduling.reps, previousFluencyReps + 1, 'rating must update spaced repetition state');
+assert.strictEqual(state.fluency.events.length, 1, 'review event history missing');
+api.finishFluencySession();
+api.setView('today');
+
 let edgePullPrevented = false;
 const touchTarget = { closest: () => null };
 documentListeners.get('touchstart')[0]({ touches: [{ clientX: 100, clientY: 100 }] });
@@ -409,8 +447,8 @@ assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mo
 assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
 assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
-assert(indexSource.includes('styles.css?v=26') && indexSource.includes('app.js?v=26') && indexSource.includes('cloud-sync.js?v=26'), 'v26 asset cache keys missing');
-assert(swSource.includes("objetivos-spatial-v26"), 'v26 service-worker cache missing');
+assert(indexSource.includes('styles.css?v=27') && indexSource.includes('app.js?v=27') && indexSource.includes('cloud-sync.js?v=27'), 'v27 asset cache keys missing');
+assert(swSource.includes("objetivos-spatial-v27"), 'v27 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
