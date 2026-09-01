@@ -23,6 +23,8 @@ Aplicativo pessoal de execução diária: tarefas, projetos, metas com prazo e a
 - PWA com cache offline.
 - Lembretes locais e Web Push disparado pelo servidor mesmo com o PWA fechado.
 - Aba Fluency com perfil CEFR por habilidade, fila adaptativa e histórico de sessões.
+- Currículo inicial personalizado a partir das 16 aulas particulares e de todas as 130 páginas dos materiais Canva, com 140 bases A1 ordenadas do alfabeto ao acusativo e aos verbos `хотеть`/`любить`.
+- Visão de progresso por aula: conteúdo apenas visto não conta como dominado; a consolidação cresce com recuperação ativa espaçada.
 - Cinco formas de recuperação: reconhecimento, produção escrita, lacuna, ditado e shadowing.
 - Estado de memória por cartão com dificuldade, estabilidade, recuperabilidade e retenção-alvo de 90%.
 - Proteção contra acúmulo: no máximo 20% da sessão vem do backlog atrasado.
@@ -47,7 +49,7 @@ No iPhone, notificações com o app fechado exigem instalar o site na Tela de In
 
 ## Fluency inteligente
 
-O motor local está em `fluency-engine.js` e continua funcionando offline. O enriquecimento de materiais fica em `supabase/functions/fluency-generate`: a chave da OpenAI nunca entra no PWA. A função autentica o usuário, baixa somente arquivos do caminho privado dele, trata o conteúdo como dado não confiável e devolve até 30 cartões em JSON estrito.
+O currículo particular está em `fluency-curriculum.js`; o motor local fica em `fluency-engine.js` e continua funcionando offline. O enriquecimento de materiais fica em `supabase/functions/fluency-generate`: a chave da OpenAI nunca entra no PWA. A função autentica o usuário, baixa somente arquivos do caminho privado dele, trata o conteúdo como dado não confiável e devolve até 30 cartões em JSON estrito.
 
 Para ativar o pipeline em um projeto Supabase já vinculado:
 

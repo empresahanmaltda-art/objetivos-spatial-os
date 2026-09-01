@@ -21,10 +21,17 @@ const context = {
 };
 context.globalThis = context;
 vm.createContext(context);
+vm.runInContext(fs.readFileSync('fluency-curriculum.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('fluency-engine.js', 'utf8'), context);
 
 const engine = context.FluencyEngine;
+const curriculum = context.FluencyCurriculumRU;
 assert(engine, 'Fluency engine missing');
+assert(curriculum, 'Russian curriculum missing');
+assert.strictEqual(curriculum.lessons.length, 16);
+assert.strictEqual(curriculum.cards.length, 140);
+assert.strictEqual(curriculum.pageCount, 130);
+assert.strictEqual(new Set(curriculum.cards.map((card) => card.id)).size, curriculum.cards.length, 'curriculum card ids must be unique');
 
 const exact = engine.gradeAnswer('Это моя книга.', 'это моя книга');
 assert.strictEqual(exact.verdict, 'exact');
@@ -53,6 +60,9 @@ assert.strictEqual(parsed.unresolved.length, 1, 'unresolved material must be pre
 assert(parsed.items.every((item) => item.sourceId === sourceId));
 
 const state = engine.defaultState();
+assert.strictEqual(state.items.length, 148, 'starter and full private-course curriculum must be available');
+assert.strictEqual(state.curriculumVersion, curriculum.VERSION);
+assert.strictEqual(engine.curriculumProgress(state).lessons.length, 16);
 const today = engine.localISO();
 state.items.forEach((item, index) => {
   item.scheduling.state = 'review';
@@ -75,6 +85,9 @@ const recallNow = engine.retrievability(scheduled.scheduling, today);
 const recallLater = engine.retrievability(scheduled.scheduling, engine.addDays(today, 30));
 assert(recallNow > recallLater, 'retrievability must decay as time passes');
 assert(engine.intervalForRetention(12, .9) >= 11, 'target retention should translate stability into an interval');
+const latinFirst = engine.scheduleReview(engine.sanitizeItem({ targetPhrase: 'Hello world.', nativeTranslation: 'Olá mundo.' }), 4, today);
+const cyrillicFirst = engine.scheduleReview(engine.sanitizeItem({ targetPhrase: 'Привет, мир!', nativeTranslation: 'Olá, mundo!' }), 4, today);
+assert(cyrillicFirst.scheduling.scheduledDays < latinFirst.scheduling.scheduledDays, 'early Cyrillic intervals must be shorter than Latin ones');
 
 const lapse = engine.scheduleReview(scheduled, 1, today);
 assert.strictEqual(lapse.scheduling.lapses, scheduled.scheduling.lapses + 1);
@@ -94,6 +107,9 @@ const sanitized = engine.sanitizeState({
 assert.strictEqual(sanitized.profile.overallLevel, 'A1');
 assert.strictEqual(sanitized.profile.dailyMinutes, 240);
 assert.strictEqual(sanitized.settings.newPerDay, 30);
+assert.strictEqual(sanitized.items.length, parsed.items.length + curriculum.cards.length, 'existing accounts must receive the curriculum exactly once');
+const sanitizedTwice = engine.sanitizeState(sanitized);
+assert.strictEqual(sanitizedTwice.items.length, sanitized.items.length, 'curriculum migration must be idempotent');
 const preserved = engine.sanitizeSource({
   id: sourceId,
   title: 'Aula 01',

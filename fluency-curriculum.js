@@ -1,0 +1,231 @@
+(() => {
+  'use strict';
+
+  const VERSION = 1;
+  const COURSE_ID = 'ru-private-course-2026';
+  const notionUrl = 'https://app.notion.com/p/Kauan-Hanma-3826df77134580348816f3e087f98c98';
+
+  const lessons = [
+    ['l01', 1, 'Alfabeto e leitura', '2026-06-16', 'https://canva.link/g2h6fnquq0zzd0f', 39, 'Letras, consoantes, vogais iotizadas, ь, ъ, ё, ы e leitura inicial.'],
+    ['l02', 2, 'Identidade e origem', '2026-06-19', 'https://canva.link/aadc3qbncjw4ax0', 12, 'Fonética, verbo ser/estar omitido, profissão, origem e negação.'],
+    ['l03', 3, 'Mapa dos casos russos', '2026-06-22', '', 0, 'Terminações como sinais de lugar, ação, ausência e companhia.'],
+    ['l04', 4, 'У меня есть', '2026-07-07', 'https://canva.link/y27e16m0u4yv8hg', 11, 'Posse como existência, localização, acentuação e patronímico.'],
+    ['l05', 5, 'Gêneros russos', '2026-07-03', 'https://canva.link/24c8pdexdiwa3tk', 5, 'Masculino, feminino, neutro, terminações e exceções frequentes.'],
+    ['l06', 6, 'Pronomes possessivos', '2026-07-07', 'https://canva.link/r7wrhkuv6thmnbb', 8, 'Мой, твой, наш, ваш e concordância com o substantivo.'],
+    ['l07', 7, 'Genitivo: posse e ausência', '2026-07-10', 'https://canva.link/dgkehc6bri8p5oj', 11, 'У, нет e formação do genitivo masculino, neutro e feminino.'],
+    ['l08', 8, 'Genitivo: objetos e direção', '2026-07-21', 'https://canva.link/fjvdnq0p8ob0wve', 7, 'Vocabulário de objetos, из, для, origem e beneficiário.'],
+    ['l09', 9, 'Genitivo: prática integrada', '2026-07-24', 'https://canva.link/fjvdnq0p8ob0wve', 7, 'Bola de neve, mini-diálogo e uso integrado de из, для e нет.'],
+    ['l10', 10, 'Conjugação de verbos', '2026-07-28', 'https://canva.link/rvtnqhefa6px1ey', 12, 'Primeira e segunda conjugações, exceções e verbos essenciais.'],
+    ['l11', 11, 'Querer e poder', '2026-07-31', 'https://canva.link/0p5mvjim9zeyybk', 19, 'Хотеть, мочь, infinitivos, дома/домой e justificativas com потому что.'],
+    ['l12', 12, 'Prática de estruturas', '2026-08-04', '', 0, 'В, на, из, posse, perguntas, vocabulário e produção guiada.'],
+    ['l13', 13, 'Prática de fluência', '2026-08-07', '', 0, 'Frases progressivas, combinações e recuperação sem consultar tabelas.'],
+    ['l14', 14, 'Caso acusativo', '2026-08-11', 'https://canva.link/0zi789vxfym91br', 6, 'Objeto direto, animado versus inanimado e terminações -а/-я.'],
+    ['l15', 15, 'Acusativo: prática', '2026-08-14', '', 0, 'Aplicação do acusativo com pessoas, objetos, comida e verbos frequentes.'],
+    ['l16', 16, 'Хотеть e любить', '2026-08-18', 'https://canva.link/0p5mvjim9zeyybk', 19, 'Querer, gostar/amar, infinitivo e objeto direto.']
+  ].map(([id, number, title, date, externalUrl, pageCount, summary]) => ({
+    id, number, title, date, externalUrl, pageCount, summary
+  }));
+
+  const lessonById = Object.fromEntries(lessons.map((lesson) => [lesson.id, lesson]));
+  const c = (lessonId, id, focusWord, targetPhrase, nativeTranslation, grammarNote, modePriority = 'recall', extra = {}) => ({
+    id: `ru-a1-${lessonId}-${id}`,
+    sourceId: COURSE_ID,
+    lessonId,
+    unitTitle: lessonById[lessonId].title,
+    order: lessonById[lessonId].number * 100 + Number(id),
+    level: 'A1',
+    focusWord,
+    targetPhrase,
+    nativeTranslation,
+    grammarNote,
+    modePriority,
+    sourceQuote: `Урок ${lessonById[lessonId].number} · ${lessonById[lessonId].title}`,
+    tags: ['curso-particular', `aula-${lessonById[lessonId].number}`, ...(extra.tags || [])],
+    transliteration: extra.transliteration || '',
+    literalGloss: extra.literalGloss || '',
+    wordBreakdown: extra.wordBreakdown || '',
+    mnemonicAssociation: extra.mnemonicAssociation || '',
+    pronunciationTip: extra.pronunciationTip || ''
+  });
+
+  const cards = [
+    c('l01', '01', 'вижу', 'Я вижу паспорт.', 'Eu vejo o passaporte.', 'Вижу é a forma de видеть para я; паспорт é objeto inanimado e não muda no acusativo.', 'shadowing', { transliteration: 'Ya vízhu pásport.', pronunciationTip: 'Ж soa como o j francês de “jour”; a força cai em ви́жу.' }),
+    c('l01', '02', 'банк', 'Я вижу банк.', 'Eu vejo o banco.', 'O padrão Я вижу + objeto cria uma primeira frase completa sem sobrecarregar a memória.', 'listening'),
+    c('l01', '03', 'такси', 'Я вижу такси.', 'Eu vejo o táxi.', 'Такси é palavra internacional e invariável.', 'recognition'),
+    c('l01', '04', 'мама', 'Мама тут.', 'A mamãe está aqui.', 'No presente, o verbo ser/estar não precisa aparecer.', 'listening', { pronunciationTip: 'М e А soam muito próximos do português.' }),
+    c('l01', '05', 'папа', 'Папа тут.', 'O papai está aqui.', 'Frase mínima para automatizar П e o ritmo russo.', 'shadowing'),
+    c('l01', '06', 'дом', 'Это дом.', 'Isto é uma casa.', 'Это apresenta e identifica algo.', 'recognition', { pronunciationTip: 'Д é dental; toque a língua perto dos dentes superiores.' }),
+    c('l01', '07', 'кот', 'Это кот.', 'Isto é um gato.', 'Кот é masculino e termina em consoante.', 'listening'),
+    c('l01', '08', 'пицца', 'Это пицца.', 'Isto é pizza.', 'Ц representa o encontro rápido de т + с.', 'shadowing', { pronunciationTip: 'Diga “pít-sa”; Ц nunca é o som português de “s” sozinho.' }),
+    c('l01', '09', 'ещё', 'Ещё кофе, пожалуйста.', 'Mais café, por favor.', 'Ё é sempre tônica, mesmo quando aparece escrita como е em textos comuns.', 'listening', { pronunciationTip: 'Ещё soa aproximadamente “yi-SHÓ”.' }),
+    c('l01', '10', 'музыка', 'Это музыка.', 'Isto é música.', 'Ы é uma vogal posterior sem equivalente exato em português.', 'shadowing', { pronunciationTip: 'Em му́зыка, mantenha a língua recuada no ы; não transforme em “i”.' }),
+
+    c('l02', '01', 'студент', 'Я студент.', 'Eu sou estudante.', 'No presente, o russo omite o verbo ser/estar: sujeito + identidade.', 'recall'),
+    c('l02', '02', 'врач', 'Я не врач.', 'Eu não sou médico.', 'Не vem imediatamente antes do elemento negado.', 'cloze'),
+    c('l02', '03', 'блогер', 'Она блогер.', 'Ela é blogueira.', 'Não se usa есть para ligar pessoa e profissão no presente.', 'listening'),
+    c('l02', '04', 'Бразилия', 'Я из Бразилии.', 'Eu sou do Brasil.', 'Из pede genitivo; Бразилия muda para Бразилии.', 'recall', { wordBreakdown: 'Я = eu; из = de; Бразилии = do Brasil.' }),
+    c('l02', '05', 'Россия', 'Она из России.', 'Ela é da Rússia.', 'Россия termina em -ия e forma o genitivo em -ии.', 'cloze'),
+    c('l02', '06', 'учитель', 'Я учитель.', 'Eu sou professor.', 'Uma profissão pode vir diretamente depois de я.', 'listening'),
+    c('l02', '07', 'инженер', 'Он инженер.', 'Ele é engenheiro.', 'O verbo de ligação permanece subentendido.', 'shadowing'),
+    c('l02', '08', 'сок', 'Это сок из лимона.', 'Isto é suco de limão.', 'Из + genitivo também expressa composição/origem: лимон → лимона.', 'recall'),
+    c('l02', '09', 'зовут', 'Меня зовут Кауан.', 'Meu nome é Kauan.', 'Меня зовут é a forma natural de apresentar o nome.', 'shadowing', { transliteration: 'Menya zovút Kauan.', wordBreakdown: 'Меня = a mim; зовут = chamam; sentido natural: meu nome é.' }),
+
+    c('l03', '01', 'центре', 'Я в центре.', 'Eu estou no centro.', 'В + lugar estático usa o caso prepositivo: центр → центре.', 'cloze'),
+    c('l03', '02', 'России', 'Я живу в России.', 'Eu moro na Rússia.', 'Depois de в indicando localização, Россия vira России.', 'recall'),
+    c('l03', '03', 'панораму', 'Я вижу панораму.', 'Eu vejo a paisagem panorâmica.', 'Objeto feminino em -а muda para -у no acusativo.', 'cloze'),
+    c('l03', '04', 'семью', 'Я люблю семью.', 'Eu amo a família.', 'Семья muda para семью como objeto direto.', 'recall'),
+    c('l03', '05', 'билета', 'У меня нет билета.', 'Eu não tenho bilhete.', 'Нет exige genitivo: билет → билета.', 'cloze'),
+    c('l03', '06', 'другом', 'Я с другом.', 'Eu estou com um amigo.', 'С indicando companhia pede instrumental: друг → другом.', 'recall'),
+    c('l03', '07', 'проекте', 'Я думаю о проекте.', 'Eu penso no projeto.', 'О + assunto usa o prepositivo: проект → проекте.', 'cloze'),
+
+    c('l04', '01', 'есть', 'У меня есть кофе.', 'Eu tenho café.', 'A estrutura literal é “perto de mim existe café”: у меня + есть + objeto.', 'recall', { wordBreakdown: 'У меня = comigo/no meu espaço; есть = existe; кофе = café.' }),
+    c('l04', '02', 'тебя', 'У тебя есть время?', 'Você tem tempo?', 'Para perguntar, a estrutura não muda; a entonação sobe no final.', 'listening'),
+    c('l04', '03', 'него', 'У него есть кот.', 'Ele tem um gato.', 'У него significa “com ele/no espaço dele”.', 'cloze'),
+    c('l04', '04', 'неё', 'У неё есть идея.', 'Ela tem uma ideia.', 'У неё é a forma para “ela tem”; ё recebe a tonicidade.', 'listening'),
+    c('l04', '05', 'секрет', 'У неё есть секрет.', 'Ela tem um segredo.', 'O objeto possuído permanece no nominativo depois de есть.', 'recall'),
+    c('l04', '06', 'где', 'Где ты?', 'Onde você está?', 'Где pergunta localização estática.', 'listening'),
+    c('l04', '07', 'парке', 'Я в парке.', 'Eu estou no parque.', 'Парк recebe -е no caso prepositivo.', 'cloze'),
+    c('l04', '08', 'Артём', 'Это Артём.', 'Este é o Artiom.', 'Ё é sempre tônica: Артём.', 'shadowing', { pronunciationTip: 'Pronuncie ar-TIÔM, com força na sílaba de ё.' }),
+
+    c('l05', '01', 'дом', 'Это мой дом.', 'Esta é a minha casa.', 'Дом é masculino porque termina em consoante; por isso мой.', 'cloze'),
+    c('l05', '02', 'работа', 'Это моя работа.', 'Este é o meu trabalho.', 'Работа termina em -а e é feminina; por isso моя.', 'cloze'),
+    c('l05', '03', 'море', 'Это моё море.', 'Este é o meu mar.', 'Море termina em -е e é neutro; por isso моё.', 'cloze'),
+    c('l05', '04', 'дерево', 'Это большое дерево.', 'Esta é uma árvore grande.', 'Дерево termina em -о e é neutro.', 'recognition'),
+    c('l05', '05', 'семья', 'Это моя семья.', 'Esta é a minha família.', 'Семья termina em -я e é feminina.', 'recall'),
+    c('l05', '06', 'дедушка', 'Это мой дедушка.', 'Este é o meu avô.', 'Дедушка termina em -а, mas é masculino por se referir a um homem.', 'cloze'),
+    c('l05', '07', 'имя', 'Это моё имя.', 'Este é o meu nome.', 'Имя pertence ao grupo especial em -мя e é neutro.', 'cloze'),
+    c('l05', '08', 'кофе', 'Это мой кофе.', 'Este é o meu café.', 'No padrão moderno, кофе é tratado como masculino.', 'recall'),
+
+    c('l06', '01', 'твой', 'Где твой паспорт?', 'Onde está o seu passaporte?', 'Паспорт é masculino; use твой.', 'cloze'),
+    c('l06', '02', 'твоя', 'Где твоя анкета?', 'Onde está o seu formulário?', 'Анкета é feminino; use твоя.', 'cloze'),
+    c('l06', '03', 'моё', 'Где моё заявление?', 'Onde está o meu requerimento?', 'Заявление é neutro; use моё.', 'cloze'),
+    c('l06', '04', 'он', 'Он на столе.', 'Ele está sobre a mesa.', 'Он retoma um substantivo masculino, como диплом.', 'recall'),
+    c('l06', '05', 'она', 'Она у врача.', 'Ela está com/perto do médico.', 'Она retoma um substantivo feminino, como анкета.', 'recall'),
+    c('l06', '06', 'оно', 'Оно в папке.', 'Ele/isso está na pasta.', 'Оно retoma um substantivo neutro, como заявление.', 'recall'),
+    c('l06', '07', 'наш', 'Это наш компьютер.', 'Este é o nosso computador.', 'Компьютер é masculino; use наш.', 'cloze'),
+    c('l06', '08', 'наша', 'Это наша машина.', 'Este é o nosso carro.', 'Машина é feminino; use наша.', 'cloze'),
+    c('l06', '09', 'наше', 'Это наше метро.', 'Este é o nosso metrô.', 'Метро é invariável e neutro; use наше.', 'cloze'),
+    c('l06', '10', 'ваш', 'Где ваш музей?', 'Onde está o museu de vocês/do senhor?', 'Музей é masculino apesar do final -й.', 'recall'),
+
+    c('l07', '01', 'брата', 'У брата есть телефон.', 'O irmão tem um telefone.', 'Брат termina em consoante e forma o genitivo com -а: брата.', 'cloze'),
+    c('l07', '02', 'сестры', 'У сестры нет книги.', 'A irmã não tem livro.', 'Сестра muda -а para -ы; книга muda para книги após нет.', 'recall'),
+    c('l07', '03', 'студента', 'У студента нет учебника.', 'O estudante não tem livro didático.', 'Студент e учебник recebem -а no genitivo.', 'cloze'),
+    c('l07', '04', 'папы', 'У папы нет планшета.', 'O pai não tem tablet.', 'Папа é masculino, mas declina como palavras em -а: папы.', 'cloze'),
+    c('l07', '05', 'мамы', 'У мамы нет газеты.', 'A mãe não tem jornal.', 'Мама → мамы e газета → газеты no genitivo.', 'recall'),
+    c('l07', '06', 'подруги', 'У подруги нет папки.', 'A amiga não tem pasta.', 'Depois de г/к/х, escreve-se -и: подруги, папки.', 'cloze'),
+    c('l07', '07', 'водителя', 'У водителя нет прав.', 'O motorista não tem carteira de motorista.', 'Водитель termina em ь e forma o genitivo em -я: водителя.', 'recall'),
+    c('l07', '08', 'хлеба', 'В магазине нет хлеба.', 'Não há pão na loja.', 'Нет exige genitivo: хлеб → хлеба; магазин está no prepositivo магазине.', 'cloze'),
+    c('l07', '09', 'воды', 'В отеле нет воды.', 'Não há água no hotel.', 'Вода muda -а para -ы no genitivo.', 'recall'),
+    c('l07', '10', 'чая', 'Чай без лимона.', 'Chá sem limão.', 'Без exige genitivo: чай → чая; лимон → лимона.', 'cloze'),
+
+    c('l08', '01', 'иду', 'Я иду из парка.', 'Eu estou vindo do parque.', 'Из marca origem e pede genitivo: парк → парка.', 'recall'),
+    c('l08', '02', 'аптеки', 'Она идёт из аптеки.', 'Ela está vindo da farmácia.', 'Аптека muda para аптеки depois de из.', 'cloze'),
+    c('l08', '03', 'для', 'Это подарок для друга.', 'Isto é um presente para um amigo.', 'Для sempre pede genitivo: друг → друга.', 'recall'),
+    c('l08', '04', 'тренера', 'Я покупаю шоколад для тренера.', 'Eu compro chocolate para o treinador.', 'Тренер recebe -а no genitivo depois de для.', 'cloze'),
+    c('l08', '05', 'зарядки', 'У меня нет зарядки.', 'Eu não tenho carregador.', 'Зарядка muda para зарядки após нет.', 'recall'),
+    c('l08', '06', 'наушники', 'У неё есть наушники.', 'Ela tem fones de ouvido.', 'Depois de есть, o objeto existente permanece no nominativo.', 'listening'),
+    c('l08', '07', 'блокнота', 'У него нет блокнота.', 'Ele não tem caderno.', 'Блокнот recebe -а no genitivo.', 'cloze'),
+    c('l08', '08', 'ещё', 'У тебя есть ещё вода?', 'Você ainda tem mais água?', 'Ещё pode significar “ainda” ou “mais”, conforme o contexto.', 'listening'),
+
+    c('l09', '01', 'магазина', 'Я иду из магазина.', 'Eu estou vindo da loja.', 'Из + магазин usa genitivo: магазина.', 'cloze'),
+    c('l09', '02', 'поздно', 'Я иду из магазина поздно.', 'Eu saio/venho da loja tarde.', 'Поздно é advérbio e não muda.', 'shadowing'),
+    c('l09', '03', 'брата', 'Я покупаю билет для брата.', 'Eu compro um bilhete para o meu irmão.', 'Для + брат exige genitivo: брата.', 'recall'),
+    c('l09', '04', 'соседа', 'Ты покупаешь что-то для соседа?', 'Você está comprando alguma coisa para o vizinho?', 'Depois de для, сосед vira соседа.', 'listening'),
+    c('l09', '05', 'друга', 'Я покупаю подарок для друга.', 'Eu compro um presente para um amigo.', 'A frase combina verbo conjugado, objeto direto e beneficiário no genitivo.', 'recall'),
+    c('l09', '06', 'понятно', 'Понятно. До встречи!', 'Entendi. Até mais!', 'Понятно funciona como resposta curta: “está claro/entendi”.', 'shadowing'),
+    c('l09', '07', 'но', 'У меня есть шоколад, но нет воды.', 'Eu tenho chocolate, mas não tenho água.', 'Но conecta contraste; после нет, вода vira воды.', 'recall'),
+
+    c('l10', '01', 'пишу', 'Я пишу письмо.', 'Eu escrevo uma carta.', 'Писать é irregular na raiz: я пишу.', 'recall'),
+    c('l10', '02', 'говоришь', 'Ты говоришь по-русски?', 'Você fala russo?', 'Говорить é da segunda conjugação: ты говоришь.', 'listening'),
+    c('l10', '03', 'работает', 'Он работает в офисе.', 'Ele trabalha no escritório.', 'Работать é da primeira conjugação: он работает.', 'cloze'),
+    c('l10', '04', 'едем', 'Мы едем на автобусе.', 'Nós vamos de ônibus.', 'Ехать é irregular: мы едем.', 'recall'),
+    c('l10', '05', 'видите', 'Вы видите этот дом?', 'O senhor/vocês veem esta casa?', 'Видеть é exceção da segunda conjugação: вы видите.', 'listening'),
+    c('l10', '06', 'пьют', 'Они пьют чай.', 'Eles bebem chá.', 'Пить é irregular: они пьют.', 'cloze'),
+    c('l10', '07', 'смотрит', 'Она смотрит фильм.', 'Ela assiste a um filme.', 'Смотреть é uma das exceções da segunda conjugação: смотрит.', 'recall'),
+    c('l10', '08', 'учим', 'Мы учим русский язык.', 'Nós estudamos russo.', 'Учить é da segunda conjugação: мы учим.', 'cloze'),
+    c('l10', '09', 'делаешь', 'Ты делаешь домашнее задание.', 'Você faz a lição de casa.', 'Делать mantém -а- e recebe -ешь: делаешь.', 'recall'),
+    c('l10', '10', 'знает', 'Она знает этот город.', 'Ela conhece esta cidade.', 'Знать é da primeira conjugação: она знает.', 'cloze'),
+    c('l10', '11', 'работают', 'Они работают каждый день.', 'Eles trabalham todos os dias.', 'Na primeira conjugação, они costuma terminar em -ут/-ют.', 'recall'),
+    c('l10', '12', 'едим', 'Мы едим салат.', 'Nós comemos salada.', 'Есть é irregular: мы едим.', 'listening'),
+
+    c('l11', '01', 'хочу', 'Я хочу пить.', 'Eu quero beber.', 'Depois de хочу, o segundo verbo fica no infinitivo.', 'recall'),
+    c('l11', '02', 'можешь', 'Ты можешь помочь?', 'Você pode ajudar?', 'Мочь é irregular: ты можешь; depois vem infinitivo.', 'listening'),
+    c('l11', '03', 'домой', 'Я хочу ехать домой.', 'Eu quero ir para casa.', 'Домой indica direção “para casa”; дома indica localização “em casa”.', 'cloze'),
+    c('l11', '04', 'дома', 'Я сейчас дома.', 'Eu estou em casa agora.', 'Дома responde onde; домой responde para onde.', 'cloze'),
+    c('l11', '05', 'хочет', 'Он хочет отдыхать в парке.', 'Ele quer descansar no parque.', 'Хотеть: он хочет + infinitivo отдыхать.', 'recall'),
+    c('l11', '06', 'можем', 'Мы можем говорить по-русски.', 'Nós podemos falar russo.', 'Мочь: мы можем + infinitivo.', 'shadowing'),
+    c('l11', '07', 'могут', 'Они могут работать дома.', 'Eles podem trabalhar em casa.', 'Мочь: они могут; дома indica localização.', 'cloze'),
+    c('l11', '08', 'потому что', 'Я устал, потому что много работаю.', 'Estou cansado porque trabalho muito.', 'Потому что introduz a causa e é seguido por uma oração completa.', 'recall'),
+    c('l11', '09', 'устал', 'Я устал от работы.', 'Estou cansado do trabalho.', 'От pede genitivo: работа → работы.', 'cloze'),
+    c('l11', '10', 'не могу', 'Извини, я не могу пойти.', 'Desculpe, eu não posso ir.', 'Uma recusa educada pode usar извини + я не могу + infinitivo.', 'shadowing'),
+
+    c('l12', '01', 'офисе', 'Я работаю в офисе.', 'Eu trabalho no escritório.', 'В + localização usa prepositivo: офис → офисе.', 'recall'),
+    c('l12', '02', 'столе', 'Телефон на столе.', 'O telefone está sobre a mesa.', 'На + superfície estática usa prepositivo: стол → столе.', 'cloze'),
+    c('l12', '03', 'татуировка', 'У девушки есть татуировка?', 'A garota tem tatuagem?', 'У девушки é genitivo da pessoa que possui; татуировка permanece nominativo.', 'listening'),
+    c('l12', '04', 'думаю', 'Я думаю, это хорошо.', 'Eu acho que isso é bom.', 'Я думаю introduz opinião simples.', 'shadowing'),
+    c('l12', '05', 'рад', 'Я рад тебя видеть.', 'Fico feliz em ver você.', 'Рад é usado por um falante homem; рада por uma mulher.', 'recall'),
+    c('l12', '06', 'подарок', 'Это подарок для тебя.', 'Isto é um presente para você.', 'Для тебя usa o pronome no genitivo.', 'listening'),
+    c('l12', '07', 'сумке', 'Мой паспорт в сумке.', 'Meu passaporte está na bolsa.', 'В + сумка no prepositivo: в сумке.', 'cloze'),
+    c('l12', '08', 'руку', 'Возьми меня за руку.', 'Segure minha mão.', 'За + movimento/contato usa acusativo: рука → руку.', 'recognition'),
+
+    c('l13', '01', 'пьёт', 'Мама пьёт колу.', 'A mãe bebe cola.', 'Frase-base: sujeito + verbo conjugado + objeto.', 'recall'),
+    c('l13', '02', 'кафе', 'Мама пьёт колу в кафе.', 'A mãe bebe cola no café.', 'Кафе é invariável; в кафе expressa localização.', 'recall'),
+    c('l13', '03', 'братом', 'Мама пьёт колу с братом в кафе.', 'A mãe bebe cola com o irmão no café.', 'С + companhia pede instrumental: брат → братом.', 'recall'),
+    c('l13', '04', 'Рима', 'Мама из Рима пьёт колу с братом в кафе.', 'A mãe de Roma bebe cola com o irmão no café.', 'Из + cidade pede genitivo: Рим → Рима.', 'recall'),
+    c('l13', '05', 'лимонада', 'Мама из Рима пьёт колу с братом в кафе, потому что нет лимонада.', 'A mãe de Roma bebe cola com o irmão no café porque não há limonada.', 'Нет exige genitivo: лимонад → лимонада.', 'shadowing'),
+    c('l13', '06', 'заказывает', 'Официант ждёт, а девушка заказывает салат.', 'O garçom espera, e a moça pede salada.', 'Заказывать é da primeira conjugação: она заказывает.', 'recall'),
+
+    c('l14', '01', 'спортсмена', 'Я вижу спортсмена.', 'Eu vejo o atleta.', 'Masculino animado recebe forma igual ao genitivo no acusativo: спортсмена.', 'cloze'),
+    c('l14', '02', 'магазин', 'Я вижу магазин.', 'Eu vejo a loja.', 'Masculino inanimado não muda no acusativo.', 'cloze'),
+    c('l14', '03', 'женщину', 'Я вижу женщину.', 'Eu vejo a mulher.', 'Feminino em -а muda para -у: женщина → женщину.', 'cloze'),
+    c('l14', '04', 'стул', 'Я вижу стул.', 'Eu vejo a cadeira.', 'Masculino inanimado permanece стул.', 'recall'),
+    c('l14', '05', 'друга', 'Я вижу друга.', 'Eu vejo um amigo.', 'Друг é masculino animado: no acusativo vira друга.', 'cloze'),
+    c('l14', '06', 'мужчину', 'Я вижу мужчину.', 'Eu vejo o homem.', 'Мужчина é masculino, mas termina em -а e muda para -у.', 'cloze'),
+    c('l14', '07', 'учителя', 'Я вижу учителя.', 'Eu vejo o professor.', 'Учитель é animado e termina em ь; acusativo учителя.', 'cloze'),
+    c('l14', '08', 'окна', 'Я стою у окна.', 'Estou perto da janela.', 'У + lugar/objeto expressa proximidade e pede genitivo: окно → окна.', 'recall'),
+    c('l14', '09', 'входа', 'Я жду у входа.', 'Eu espero perto da entrada.', 'У входа é localização próxima da entrada.', 'shadowing'),
+
+    c('l15', '01', 'официанта', 'Я жду официанта.', 'Eu espero o garçom.', 'Ждать recebe objeto no acusativo; официант animado → официанта.', 'cloze'),
+    c('l15', '02', 'директора', 'Мы ждём директора.', 'Nós esperamos o diretor.', 'Директор é masculino animado: директора.', 'recall'),
+    c('l15', '03', 'маму', 'Я люблю маму.', 'Eu amo a minha mãe.', 'Мама muda -а para -у no acusativo.', 'cloze'),
+    c('l15', '04', 'пасту', 'Она заказывает пасту.', 'Ela pede massa.', 'Паста muda para пасту como objeto direto.', 'cloze'),
+    c('l15', '05', 'рыбу', 'Мы покупаем рыбу.', 'Nós compramos peixe.', 'Рыба muda -а para -у no acusativo.', 'recall'),
+    c('l15', '06', 'чай', 'Он пьёт чай.', 'Ele bebe chá.', 'Чай é masculino inanimado e não muda no acusativo.', 'listening'),
+    c('l15', '07', 'сестру', 'Брат видит сестру.', 'O irmão vê a irmã.', 'Сестра muda para сестру como objeto direto.', 'recall'),
+    c('l15', '08', 'папу', 'Я вижу папу.', 'Eu vejo o meu pai.', 'Папа é masculino, mas segue a declinação em -а: папу.', 'cloze'),
+
+    c('l16', '01', 'хочу', 'Я хочу сок.', 'Eu quero suco.', 'Хотеть pode receber diretamente um objeto no acusativo.', 'recall'),
+    c('l16', '02', 'хочу', 'Я хочу пить воду.', 'Eu quero beber água.', 'Para querer uma ação, use хотеть + infinitivo; воду é o objeto direto feminino de пить.', 'recall'),
+    c('l16', '03', 'люблю', 'Я люблю читать.', 'Eu gosto de ler.', 'Любить + infinitivo expressa gostar de fazer uma ação.', 'recall'),
+    c('l16', '04', 'любишь', 'Ты любишь кофе?', 'Você gosta de café?', 'Любить é da segunda conjugação: ты любишь.', 'listening'),
+    c('l16', '05', 'любит', 'Она любит футбол.', 'Ela gosta de futebol.', 'Она любит + objeto inanimado no acusativo.', 'cloze'),
+    c('l16', '06', 'хотим', 'Мы хотим говорить по-русски.', 'Nós queremos falar russo.', 'Хотеть é irregular: мы хотим.', 'shadowing'),
+    c('l16', '07', 'хотите', 'Вы хотите чай?', 'O senhor/vocês querem chá?', 'Хотеть: вы хотите.', 'listening'),
+    c('l16', '08', 'хотят', 'Они хотят жить в России.', 'Eles querem morar na Rússia.', 'Хотеть: они хотят + infinitivo жить.', 'recall'),
+    c('l16', '09', 'любят', 'Они любят путешествовать.', 'Eles gostam de viajar.', 'Любить: они любят + infinitivo.', 'shadowing'),
+    c('l16', '10', 'по-русски', 'Я хочу свободно говорить по-русски.', 'Eu quero falar russo com fluência.', 'Свободно é “livremente/com fluência”; по-русски indica o idioma.', 'shadowing', { mnemonicAssociation: 'Esta é a frase-direção do seu plano: falar sem traduzir peça por peça.' })
+  ];
+
+  const source = {
+    id: COURSE_ID,
+    title: 'Curso particular de Russo · Aulas 1–16',
+    kind: 'notion',
+    status: 'ready',
+    itemCount: cards.length,
+    unresolvedCount: 0,
+    createdAt: Date.parse('2026-06-16T12:00:00Z'),
+    note: `16 aulas e 130 páginas de Canva mapeadas. Último foco: хотеть, любить e acusativo.`,
+    externalUrl: notionUrl,
+    processedAt: '2026-09-01T00:00:00Z'
+  };
+
+  globalThis.FluencyCurriculumRU = Object.freeze({
+    VERSION,
+    COURSE_ID,
+    pageCount: 130,
+    notionUrl,
+    lessons: Object.freeze(lessons),
+    cards: Object.freeze(cards),
+    source: Object.freeze(source)
+  });
+})();
