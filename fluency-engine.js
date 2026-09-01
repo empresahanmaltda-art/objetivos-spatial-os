@@ -1,7 +1,8 @@
 (() => {
   'use strict';
 
-  const ENGINE_VERSION = 1;
+  const ENGINE_VERSION = 2;
+  const Curriculum = globalThis.FluencyCurriculumRU || null;
   const DAY_MS = 86400000;
   const FORGETTING_DECAY = -.5;
   const FORGETTING_FACTOR = 19 / 81;
@@ -151,8 +152,36 @@
     }));
   }
 
+  function curriculumItems() {
+    if (!Curriculum?.cards?.length) return [];
+    return Curriculum.cards.map((card, index) => sanitizeItem({
+      ...card,
+      createdAt: 1788220800000 + index,
+      suspended: false,
+      scheduling: defaultScheduling()
+    }, index));
+  }
+
+  function curriculumSource(itemCount) {
+    if (!Curriculum) return null;
+    return sanitizeSource({
+      id: Curriculum.COURSE_ID,
+      title: 'Curso particular · Russo A1',
+      kind: 'notion',
+      status: 'ready',
+      itemCount,
+      unresolvedCount: 0,
+      createdAt: 1788220800000,
+      note: `${Curriculum.lessons.length} aulas e ${Curriculum.pageCount} páginas do Canva organizadas em uma trilha adaptativa.`,
+      externalUrl: Curriculum.notionUrl
+    });
+  }
+
   function defaultState() {
-    const items = starterItems();
+    const starter = starterItems();
+    const courseItems = curriculumItems();
+    const items = [...starter, ...courseItems];
+    const courseSource = curriculumSource(courseItems.length);
     return {
       version: ENGINE_VERSION,
       profile: {
@@ -179,17 +208,18 @@
         title: 'Diagnóstico inicial A1',
         kind: 'starter',
         status: 'ready',
-        itemCount: items.length,
+        itemCount: starter.length,
         unresolvedCount: 0,
         createdAt: Date.now(),
-        note: 'Base curta para calibrar o sistema enquanto suas aulas são importadas.'
-      }],
+        note: 'Calibração curta antes de avançar pelo conteúdo das suas aulas.'
+      }, ...(courseSource ? [courseSource] : [])],
       items,
       events: [],
       sessions: [],
       activeSession: null,
       streak: { current: 0, best: 0, lastStudyDate: '' },
-      importedLessonIds: []
+      importedLessonIds: Curriculum?.lessons?.map((lesson) => lesson.id) || [],
+      curriculumVersion: Curriculum?.VERSION || 0
     };
   }
 
@@ -212,6 +242,8 @@
     return {
       id: String(input.id || uid('fluency-card')).slice(0, 100),
       sourceId: String(input.sourceId || 'manual').slice(0, 100),
+      lessonId: String(input.lessonId || '').slice(0, 100),
+      unitTitle: String(input.unitTitle || '').trim().slice(0, 160),
       order: Number(input.order) || index,
       level: VALID_LEVELS.includes(input.level) ? input.level : 'A1',
       focusWord: String(input.focusWord || '').trim().slice(0, 160),
@@ -268,8 +300,20 @@
     settings.maxReviews = clamp(Number(settings.maxReviews) || 30, 5, 120);
     settings.backlogShare = clamp(Number(settings.backlogShare) || .2, .05, .5);
     settings.requestRetention = clamp(Number(settings.requestRetention) || .9, .8, .97);
-    const items = Array.isArray(input.items) ? input.items.slice(0, 5000).map(sanitizeItem).filter((item) => item.targetPhrase && item.nativeTranslation) : base.items;
-    const sources = Array.isArray(input.sources) && input.sources.length ? input.sources.slice(0, 500).map(sanitizeSource) : base.sources;
+    let items = Array.isArray(input.items) ? input.items.slice(0, 5000).map(sanitizeItem).filter((item) => item.targetPhrase && item.nativeTranslation) : base.items;
+    let sources = Array.isArray(input.sources) && input.sources.length ? input.sources.slice(0, 500).map(sanitizeSource) : base.sources;
+    const storedCurriculumVersion = Math.max(0, Number(input.curriculumVersion) || 0);
+    const currentCurriculumVersion = Curriculum?.VERSION || 0;
+    if (currentCurriculumVersion > storedCurriculumVersion) {
+      const itemIds = new Set(items.map((item) => item.id));
+      const additions = curriculumItems().filter((item) => !itemIds.has(item.id));
+      items = [...items, ...additions].slice(0, 5000);
+      const source = curriculumSource(curriculumItems().length);
+      if (source && !sources.some((candidate) => candidate.id === source.id)) sources = [...sources, source];
+    }
+    const curriculumLessonIds = currentCurriculumVersion > storedCurriculumVersion
+      ? Curriculum.lessons.map((lesson) => lesson.id)
+      : [];
     return {
       ...base,
       ...input,
@@ -282,7 +326,11 @@
       sessions: Array.isArray(input.sessions) ? input.sessions.slice(-365) : [],
       activeSession: input.activeSession && typeof input.activeSession === 'object' ? input.activeSession : null,
       streak: { ...base.streak, ...(input.streak || {}) },
-      importedLessonIds: Array.isArray(input.importedLessonIds) ? [...new Set(input.importedLessonIds.map(String))].slice(0, 1000) : []
+      importedLessonIds: [...new Set([
+        ...(Array.isArray(input.importedLessonIds) ? input.importedLessonIds.map(String) : []),
+        ...curriculumLessonIds
+      ])].slice(0, 1000),
+      curriculumVersion: Math.max(storedCurriculumVersion, currentCurriculumVersion)
     };
   }
 
@@ -375,6 +423,8 @@
       interval = intervalForRetention(stability, requestRetention);
       difficulty = clamp(difficulty + ({ 2: .2, 3: -.15, 4: -.45 }[value] || 0), 1, 10);
     }
+    const nonLatinFirstHours = /[\u0400-\u04ff]/u.test(item.targetPhrase) && previous.reps < 2 && interval > 0 && interval <= 4;
+    if (nonLatinFirstHours) interval = Math.max(1, Math.round(interval * .8));
     item.scheduling = {
       state: value === 1 ? 'relearning' : interval <= 2 ? 'learning' : 'review',
       due: addDays(date, interval),
@@ -471,6 +521,33 @@
     return { newCount, dueCount: due.length, backlog, total: active.length, mature: active.filter((item) => item.scheduling.state === 'review').length };
   }
 
+  function itemMastery(item) {
+    const scheduling = sanitizeScheduling(item?.scheduling);
+    if (scheduling.state === 'new' || !scheduling.reps) return 0;
+    if (scheduling.state === 'relearning') return clamp(18 + scheduling.reps * 3 - scheduling.lapses * 4, 10, 48);
+    if (scheduling.state === 'learning') return clamp(28 + scheduling.reps * 10, 28, 58);
+    return clamp(Math.round(50 + scheduling.reps * 6 + Math.log2(1 + scheduling.stability) * 8 - scheduling.lapses * 5), 45, 100);
+  }
+
+  function curriculumProgress(input) {
+    const state = sanitizeState(input);
+    if (!Curriculum?.lessons?.length) return { lessons: [], current: null, overall: 0, mastered: 0 };
+    const lessons = Curriculum.lessons.map((lesson) => {
+      const items = state.items.filter((item) => item.lessonId === lesson.id && !item.suspended);
+      const mastery = items.length ? Math.round(items.reduce((sum, item) => sum + itemMastery(item), 0) / items.length) : 0;
+      const reviewed = items.filter((item) => item.scheduling.reps > 0).length;
+      return { ...lesson, itemCount: items.length, reviewed, mastery, status: 'mapped' };
+    });
+    const firstUnmastered = lessons.findIndex((lesson) => lesson.mastery < 75);
+    const currentIndex = firstUnmastered === -1 ? lessons.length - 1 : firstUnmastered;
+    lessons.forEach((lesson, index) => {
+      lesson.status = lesson.mastery >= 75 ? 'mastered' : index === currentIndex ? 'current' : index === currentIndex + 1 ? 'next' : 'mapped';
+    });
+    const mastered = lessons.filter((lesson) => lesson.mastery >= 75).length;
+    const overall = Math.round(lessons.reduce((sum, lesson) => sum + lesson.mastery, 0) / lessons.length);
+    return { lessons, current: lessons[currentIndex] || lessons[lessons.length - 1], currentIndex, overall, mastered };
+  }
+
   globalThis.FluencyEngine = Object.freeze({
     ENGINE_VERSION,
     VALID_LEVELS,
@@ -495,6 +572,7 @@
     promptFor,
     parseImportedText,
     dueSummary,
+    curriculumProgress,
     clone,
     uid
   });

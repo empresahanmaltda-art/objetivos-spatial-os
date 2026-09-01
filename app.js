@@ -1372,6 +1372,9 @@
     const summary = Fluency.dueSummary(fluency, date);
     const plan = Fluency.buildSession(fluency, { date, minutes });
     const metrics = Fluency.skillMetrics(fluency);
+    const curriculum = Fluency.curriculumProgress(fluency);
+    const currentLesson = curriculum.current;
+    const lessonPreview = curriculum.lessons.slice(curriculum.currentIndex, curriculum.currentIndex + 4);
     const session = fluency.activeSession;
     const studiedToday = fluency.events.filter((event) => event.date === date).length;
     const completedThisWeek = fluency.sessions.filter((item) => Fluency.dayDiff(item.date, date) >= 0 && Fluency.dayDiff(item.date, date) <= 6).length;
@@ -1404,6 +1407,25 @@
           <article><span>Sequência</span><strong>${fluency.streak.current}d</strong><small>${completedThisWeek}/${fluency.profile.weeklyGoal} sessões na semana</small></article>
           <article><span>Hoje</span><strong>${studiedToday}</strong><small>recuperações concluídas</small></article>
         </div>
+
+        ${currentLesson ? `<section class="fluency-section fluency-course-section">
+          <div class="fluency-section-head"><div><span>Trilha das suas aulas</span><strong>Do alfabeto ao que você estudou por último</strong></div><button class="chip-button" data-action="fluencyCurriculum" type="button">Ver 16 aulas</button></div>
+          <div class="fluency-course-summary">
+            <div class="fluency-course-number">${String(currentLesson.number).padStart(2, '0')}</div>
+            <div class="fluency-course-copy">
+              <small>Agora · Aula ${currentLesson.number}</small>
+              <strong>${esc(currentLesson.title)}</strong>
+              <p>${esc(currentLesson.summary)}</p>
+              <div class="fluency-course-track"><i style="width:${currentLesson.mastery}%"></i></div>
+              <span>${currentLesson.reviewed}/${currentLesson.itemCount} bases praticadas · ${currentLesson.mastery}% consolidado</span>
+            </div>
+            <div class="fluency-course-total"><strong>${curriculum.overall}%</strong><span>curso consolidado</span></div>
+          </div>
+          <div class="fluency-lesson-preview">
+            ${lessonPreview.map((lesson) => `<article class="${lesson.status}"><span>${String(lesson.number).padStart(2, '0')}</span><div><strong>${esc(lesson.title)}</strong><small>${lesson.status === 'current' ? 'Em calibração agora' : lesson.status === 'next' ? 'Próxima base' : lesson.mastery ? `${lesson.mastery}% consolidado` : 'Mapeada e aguardando'}</small></div><i>${lesson.mastery}%</i></article>`).join('')}
+          </div>
+          <p class="fluency-course-note">As 16 aulas e 130 páginas foram mapeadas. O sistema libera poucas bases por vez e retorna nelas até virarem memória utilizável — sem fingir que conteúdo visto já está dominado.</p>
+        </section>` : ''}
 
         <section class="fluency-section">
           <div class="fluency-section-head"><div><span>Mapa de fluência</span><strong>Cada habilidade evolui separadamente</strong></div><small>${summary.mature}/${summary.total} cartões maduros</small></div>
@@ -1989,6 +2011,31 @@
         toast('Meta removida.');
       };
     }
+  }
+
+  function fluencyCurriculumModal() {
+    const curriculum = Fluency.curriculumProgress(state.fluency);
+    openModal(`
+      <div class="modal-head">
+        <div><h2>Seu caminho no russo</h2><p>16 aulas particulares e 130 páginas organizadas numa progressão recuperável.</p></div>
+        <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <div class="fluency-curriculum-overview">
+        <article><strong>${curriculum.overall}%</strong><span>consolidação total</span></article>
+        <article><strong>${curriculum.mastered}/16</strong><span>aulas dominadas</span></article>
+        <article><strong>${state.fluency.items.filter((item) => item.lessonId).length}</strong><span>bases ativas</span></article>
+      </div>
+      <div class="fluency-curriculum-list">
+        ${curriculum.lessons.map((lesson) => `
+          <article class="${lesson.status}">
+            <div class="fluency-curriculum-index">${String(lesson.number).padStart(2, '0')}</div>
+            <div class="fluency-curriculum-copy"><small>${formatShortDate(lesson.date)} · ${lesson.itemCount} bases</small><strong>${esc(lesson.title)}</strong><span>${esc(lesson.summary)}</span><div><i style="width:${lesson.mastery}%"></i></div></div>
+            <div class="fluency-curriculum-state"><strong>${lesson.mastery}%</strong><span>${lesson.status === 'mastered' ? 'Dominada' : lesson.status === 'current' ? 'Agora' : lesson.status === 'next' ? 'Depois' : 'Mapeada'}</span>${lesson.externalUrl ? `<a href="${esc(lesson.externalUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir material da aula ${lesson.number}">↗</a>` : ''}</div>
+          </article>
+        `).join('')}
+      </div>
+      <div class="modal-actions"><button class="primary-button modal-close" type="button">Continuar pelo treino de hoje</button></div>
+    `, 'fluency-curriculum-modal');
   }
 
   function fluencyProfileModal() {
@@ -2946,6 +2993,7 @@
       revealFluency: revealFluencyAnswer,
       rateFluency: () => rateFluencyCard(rating),
       finishFluency: finishFluencySession,
+      fluencyCurriculum: fluencyCurriculumModal,
       fluencyProfile: fluencyProfileModal,
       addFluencySource: fluencySourceModal,
       processFluencySource: () => processFluencySource(id),
