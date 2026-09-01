@@ -171,6 +171,7 @@ const indexSource = fs.readFileSync('index.html', 'utf8');
 const stylesSource = fs.readFileSync('styles.css', 'utf8');
 const swSource = fs.readFileSync('sw.js', 'utf8');
 const cloudSyncSource = fs.readFileSync('cloud-sync.js', 'utf8');
+const gitignoreSource = fs.readFileSync('.gitignore', 'utf8');
 const pushSource = fs.readFileSync('supabase/functions/push-due/index.ts', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.webmanifest', 'utf8'));
 const pngDimensions = (path) => {
@@ -196,6 +197,7 @@ assert(indexSource.includes('id="authGoogleBtn"'), 'Google login entry missing')
 assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must stay locked before authentication');
 assert(!indexSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public page');
 assert(!swSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public cache');
+assert(gitignoreSource.split(/\r?\n/).includes('fluency-curriculum.js'), 'private curriculum must be ignored by Git');
 assert(indexSource.includes('fluency-engine.js?v=33'), 'Fluency engine missing from the public page');
 assert(swSource.includes("'./fluency-engine.js?v=33'"), 'Fluency engine must be available offline');
 assert(appSource.includes("data-action=\"startFluencyQuick\""), 'class-day warmup control missing');
