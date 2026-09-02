@@ -13,6 +13,7 @@
     lastHash: '',
     syncing: false,
     initialSyncPromise: null,
+    pendingHash: '',
     error: '',
     pushActive: null
   };
@@ -28,6 +29,7 @@
     delete source.lastSystemDate;
     delete source.revision;
     delete source.updatedAt;
+    delete source.cloudUpdatedAt;
     if (source.settings) delete source.settings.notificationsEnabled;
     return source;
   }
@@ -75,6 +77,7 @@
     const nextHash = JSON.stringify(payload);
     if (!force && nextHash === runtime.lastHash && localStorage.getItem(DIRTY_KEY) !== '1') return true;
     runtime.syncing = true;
+    runtime.pendingHash = nextHash;
     setTopStatus('sincronizando…', true);
     setRuntimeStatus({ syncing: true, error: '' });
     const clientUpdatedAt = new Date().toISOString();
@@ -86,11 +89,13 @@
     }, { onConflict: 'user_id' });
     runtime.syncing = false;
     if (error) {
+      if (runtime.pendingHash === nextHash) runtime.pendingHash = '';
       setRuntimeStatus({ syncing: false, error: error.message || 'Falha ao sincronizar.' });
       setTopStatus('salvo neste aparelho');
       return false;
     }
     runtime.lastHash = nextHash;
+    if (runtime.pendingHash === nextHash) runtime.pendingHash = '';
     localStorage.setItem(DIRTY_KEY, '0');
     setRuntimeStatus({ syncing: false, error: '' });
     setTopStatus('sincronizado');
@@ -112,6 +117,7 @@
     delete clean.cloudUpdatedAt;
     api()?.applyCloudState?.(clean);
     runtime.lastHash = JSON.stringify(clean);
+    runtime.pendingHash = '';
     localStorage.setItem(DIRTY_KEY, '0');
     runtime.applying = false;
     setTopStatus('sincronizado');
@@ -159,7 +165,7 @@
         const payload = event.new?.payload;
         if (!payload || runtime.applying) return;
         const remoteHash = hashState(payload);
-        if (remoteHash !== runtime.lastHash) applyRemote(payload);
+        if (remoteHash !== runtime.lastHash && remoteHash !== runtime.pendingHash) applyRemote(payload);
       })
       .subscribe();
   }

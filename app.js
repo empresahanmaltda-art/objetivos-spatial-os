@@ -1045,8 +1045,8 @@
       toggleTask(taskId, date);
       return;
     }
-    card.classList.add(card.classList.contains('completed') ? 'is-restoring' : 'is-completing');
-    setTimeout(() => toggleTask(taskId, date), 260);
+    card.classList.add('is-confirming');
+    setTimeout(() => toggleTask(taskId, date), 110);
   }
 
   function taskCard(task, date, { overdue = false, completed = false, showDate = false, showProject = false, scheduleText = '' } = {}) {
@@ -2843,9 +2843,11 @@
     const taskId = node.dataset.taskId;
     const date = node.dataset.taskDate || state.selectedDate;
     if (action === 'complete') {
-      node.classList.remove('is-dragging');
-      node.classList.add('is-completing');
-      setTimeout(() => toggleTask(taskId, date), 180);
+      node.classList.remove('is-dragging', 'drag-left', 'drag-right');
+      node.style.removeProperty('transform');
+      node.style.removeProperty('opacity');
+      node.classList.add('is-confirming');
+      setTimeout(() => toggleTask(taskId, date), 110);
       return;
     }
     resetDraggedNode(node);
@@ -3006,10 +3008,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '33');
+      freshUrl.searchParams.set('build', '34');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=33').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=34').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {

@@ -26,7 +26,11 @@ async function main() {
     select() { return this; },
     eq() { return this; },
     async maybeSingle() { return { data: null, error: null }; },
-    async upsert(row) { upserts.push(row); return { error: null }; }
+    async upsert(row) {
+      upserts.push(row);
+      if (realtimeHandler) realtimeHandler({ new: { payload: row.payload } });
+      return { error: null };
+    }
   };
   const client = {
     auth: {
@@ -144,6 +148,7 @@ async function main() {
   savedListeners.get('objetivos:state-saved')({ detail: { state: changed } });
   await new Promise((resolve) => setTimeout(resolve, 700));
   assert.strictEqual(upserts.length, 2, 'saved app change was not uploaded');
+  assert.strictEqual(remoteApplied, null, 'the device applied its own realtime echo and caused a second render');
 
   realtimeHandler({ new: { payload: { version: 3, tasks: [{ id: 'remote', title: 'Remoto' }], goals: [], settings: {} } } });
   assert(remoteApplied?.tasks?.some((task) => task.id === 'remote'), 'remote state was not applied');

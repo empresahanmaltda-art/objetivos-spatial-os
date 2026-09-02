@@ -555,7 +555,7 @@
         focusWord,
         targetPhrase,
         nativeTranslation,
-        grammarNote: 'Importado do seu material. A análise gramatical será enriquecida pela IA.',
+        grammarNote: 'Importado do seu material. A análise gramatical será enriquecida na próxima revisão feita nesta conversa.',
         mnemonicAssociation: '',
         tags: ['importado'],
         scheduling: defaultScheduling()

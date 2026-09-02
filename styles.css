@@ -340,10 +340,14 @@ body.auth-locked .app-shell{opacity:0;visibility:hidden;pointer-events:none;tran
 .task-card.is-dragging{transition:none;z-index:2;will-change:transform,opacity}
 .task-card.drag-left[data-swipe-left="complete"],.task-card.drag-right[data-swipe-right="complete"]{border-color:rgba(141,185,154,.45);box-shadow:0 0 28px rgba(92,173,119,.15),inset 0 1px 0 rgba(255,255,255,.04)}
 .task-card.drag-left[data-swipe-left="schedule"],.task-card.drag-right[data-swipe-right="schedule"]{border-color:rgb(var(--accent-rgb)/.45);box-shadow:0 0 28px rgb(var(--accent-rgb)/.15),inset 0 1px 0 rgba(255,255,255,.04)}
-.workspace .task-card.is-completing{pointer-events:none;will-change:transform,opacity;animation:taskComplete .28s var(--spring) both}
-.workspace .task-card.is-restoring{pointer-events:none;will-change:transform,opacity;animation:taskRestore .25s var(--spring-pop) both}
-@keyframes taskComplete{0%{opacity:1;transform:none}35%{transform:scale(.975)}100%{opacity:0;transform:translate3d(46px,0,0) scale(.96)}}
-@keyframes taskRestore{from{opacity:.25;transform:translate3d(-18px,0,0) scale(.97)}to{opacity:1;transform:none}}
+.workspace .task-card.is-confirming{pointer-events:none}
+.workspace .task-card.is-confirming .task-check{
+  color:var(--green);
+  border-color:var(--green);
+  background:rgba(141,185,154,.2);
+  animation:taskCheckConfirm .11s var(--spring-pop) both;
+}
+@keyframes taskCheckConfirm{0%{transform:scale(1)}55%{transform:scale(.86)}100%{transform:scale(1.06)}}
 .task-check{
   width:29px;height:29px;border-radius:50%;
   border:2px solid rgb(var(--accent-rgb)/.72);
