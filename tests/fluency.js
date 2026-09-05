@@ -10,7 +10,7 @@ vm.runInContext(fs.readFileSync('fluency-engine.js', 'utf8'), context);
 
 const engine = context.FluencyEngine;
 assert(engine, 'Fluency engine missing');
-assert.strictEqual(engine.ENGINE_VERSION, 4);
+assert.strictEqual(engine.ENGINE_VERSION, 5);
 
 const exact = engine.gradeAnswer('Это моя книга.', 'это моя книга');
 assert.strictEqual(exact.verdict, 'exact');
@@ -121,5 +121,26 @@ const preserved = engine.sanitizeSource({ id: sourceId, title: 'Aula de teste', 
 assert.strictEqual(preserved.rawText, 'conteúdo integral');
 assert.strictEqual(preserved.unresolvedText, 'linha sem tradução');
 assert.strictEqual(preserved.storagePath, 'user/lesson/aula.pdf');
+
+const evidenceState = engine.sanitizeState({ items: privateItems, curriculumLessons });
+assert.strictEqual(engine.curriculumProgress(evidenceState).current.evidence.coverageVerified, false, 'page coverage must not be inferred from card count');
+assert.strictEqual(engine.buildTransferCheck(evidenceState).lessonId, 'unit-8', 'transfer challenge must follow the latest lesson');
+const evidenceItem = evidenceState.items.find(item => item.lessonId === 'unit-8');
+evidenceState.events = [engine.addDays(today, -8), today].map(date => ({ itemId: evidenceItem.id, date, mode: 'recall', rating: 2, verdict: 'exact', assisted: false }));
+assert.strictEqual(engine.curriculumProgress(evidenceState).current.evidence.retained, 1, 'delayed successful retrieval must count');
+evidenceState.events[0].assisted = true;
+assert.strictEqual(engine.curriculumProgress(evidenceState).current.evidence.retained, 0, 'hint-assisted retrieval cannot count as unaided evidence');
+evidenceState.events.forEach(event => { event.assisted = false; event.mode = 'shadowing'; });
+assert.strictEqual(engine.curriculumProgress(evidenceState).current.evidence.retained, 0, 'self-rated speech cannot become objective evidence');
+evidenceState.transferChecks.push({ lessonId: 'unit-8', rating: 3, answer: 'Synthetic answer', evaluation: 'self' });
+const before = engine.curriculumProgress(evidenceState).current.mastery;
+assert.strictEqual(engine.curriculumProgress(evidenceState).current.evidence.transferAttempts, 1);
+assert.strictEqual(engine.curriculumProgress(evidenceState).current.mastery, before, 'transfer self-ratings must not inflate card mastery');
+const lesson = evidenceState.curriculumLessons.at(-1);
+lesson.coverageReviewedAt = today;
+evidenceItem.sourcePages = [1];
+lesson.excludedPages = [{ page: 2, reason: 'Title slide' }];
+assert.strictEqual(engine.curriculumProgress(evidenceState).current.evidence.coverageVerified, true, 'audited page mapping must survive sanitization');
+assert.strictEqual(engine.sanitizeState(evidenceState).transferChecks.length, 1, 'transfer history must survive migration');
 
 console.log(JSON.stringify({ ok: true, modes: engine.VALID_MODES, queue: plan.queue.length, backlogInPlan }));

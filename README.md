@@ -23,8 +23,8 @@ Aplicativo pessoal de execução diária: tarefas, projetos, metas com prazo e a
 - PWA com cache offline.
 - Lembretes locais e Web Push disparado pelo servidor mesmo com o PWA fechado.
 - Aba Fluency com perfil CEFR por habilidade, fila adaptativa e histórico de sessões.
-- Currículos autenticados permanecem no estado privado de cada usuário e nunca são incluídos no repositório nem no pacote público do PWA.
-- Visão de progresso por aula: conteúdo apenas visto não conta como dominado; a consolidação cresce com recuperação ativa espaçada.
+- O pacote atual não contém o currículo particular. Os materiais são carregados do estado autenticado, protegido por RLS.
+- Progresso por aula é uma estimativa de memória dos cartões, não certificação de domínio ou de fluência.
 - A aula mais recente é sempre a aula atual: ocupa de 50% a 60% do aquecimento enquanto ainda está fraca, sem abandonar a revisão acumulativa das anteriores.
 - Terça e quinta têm um único aquecimento pré-aula; depois de concluído, o painel volta ao treino normal do dia.
 - Cinco formas de recuperação: reconhecimento, produção escrita, lacuna, ditado e shadowing.
@@ -53,3 +53,21 @@ No iPhone, notificações com o app fechado exigem instalar o site na Tela de In
 ## Fluency inteligente
 
 O motor local fica em `fluency-engine.js` e continua funcionando offline depois que o usuário autenticado sincroniza seu estado. Currículos e links particulares vivem apenas no registro protegido por RLS no Supabase. O PWA não envia PDFs nem textos de aula para uma API de IA: aulas novas são entregues e analisadas nesta conversa, depois inseridas diretamente no estado privado sem entrar no repositório público.
+
+## Verificação de aprendizado (build 35)
+
+- Desafio de uso próprio com frases novas, produção oral sem leitura e pergunta/resposta. A tentativa e o rascunho são privados; as notas são identificadas como autoavaliação, sem inflar a memória dos cartões.
+- Evidência de recuperação escrita: acertos sem ajuda, em pelo menos dois dias separados por sete dias, com um acerto nos últimos 30 dias. Esses limiares são critérios operacionais do app, não uma escala de proficiência validada.
+- Níveis CEFR são informados no perfil. Lacunas não contam como interação oral; shadowing não é avaliação automática de pronúncia.
+- Cobertura do material exige `sourcePages` por cartão, `pageCount` por aula e uma auditoria registrada em `coverageReviewedAt`. Capas/páginas sem conteúdo podem constar de `excludedPages` com justificativa. Sem esse mapeamento o app informa que a cobertura integral não está comprovada.
+- Aumentar a proficiência exige também uso real e feedback. Não há garantia de fluência por prazo, número de cartões ou nota.
+
+Fundamentação: [recuperação ativa e retenção](https://doi.org/10.1111/j.1467-9280.2006.01693.x) e [habilidades descritas pelo CEFR](https://www.coe.int/en/web/common-european-framework-reference-languages/table-2-cefr-3.3-common-reference-levels-self-assessment-grid). O agendador é uma heurística própria; não é uma implementação validada de FSRS.
+
+## Confiabilidade e testes
+
+`npm ci --ignore-scripts` e `npm test` executam testes de currículo, migração, UI, sincronização e DOM. JSDOM é dependência apenas de desenvolvimento; não entra no frontend. A publicação é precedida pelos testes no GitHub Actions.
+
+O salvamento conserva o snapshot mais recente enquanto um upload está em andamento, mantém pendências após falhas e ignora ecos próprios sem depender da ordem de campos JSONB. Atualizações discretas preservam os nós DOM dos cartões e o campo em edição. Dados locais de uma conta não são enviados automaticamente para outra.
+
+A sincronização ainda usa snapshots do estado inteiro: edição simultânea em aparelhos diferentes não tem mesclagem campo a campo. Os testes de DOM não substituem validação visual e de gestos no Safari/iPhone. O cache contém somente os recursos públicos; a remoção de qualquer material que tenha existido em histórico remoto exige o procedimento do provedor.

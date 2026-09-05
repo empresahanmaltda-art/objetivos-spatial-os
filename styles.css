@@ -881,3 +881,13 @@ html[data-motion="off"] *,html[data-motion="off"] *::before,html[data-motion="of
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 }
+/* Open-ended practice shares the existing spatial palette and mobile modal. */
+.fluency-transfer-form { display: grid; gap: 16px; min-width: 0; }
+.fluency-transfer-form p, .fluency-transfer-form li { line-height: 1.6; overflow-wrap: anywhere; }
+.fluency-transfer-form label { display: grid; gap: 8px; }
+.fluency-transfer-form textarea, .fluency-transfer-form select {
+  box-sizing: border-box; width: 100%; max-width: 100%; min-height: 44px;
+  padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.16);
+  color: inherit; background: rgba(0,0,0,.18); font: inherit;
+}
+.fluency-transfer-form textarea { resize: vertical; }

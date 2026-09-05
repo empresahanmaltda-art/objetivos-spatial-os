@@ -202,8 +202,8 @@ assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must
 assert(!indexSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public page');
 assert(!swSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public cache');
 assert(gitignoreSource.split(/\r?\n/).includes('fluency-curriculum.js'), 'private curriculum must be ignored by Git');
-assert(indexSource.includes('fluency-engine.js?v=34'), 'Fluency engine missing from the public page');
-assert(swSource.includes("'./fluency-engine.js?v=34'"), 'Fluency engine must be available offline');
+assert(indexSource.includes('fluency-engine.js?v=35'), 'Fluency engine missing from the public page');
+assert(swSource.includes("'./fluency-engine.js?v=35'"), 'Fluency engine must be available offline');
 assert(appSource.includes("data-action=\"startFluencyQuick\""), 'class-day warmup control missing');
 assert(appSource.includes("startFluencyQuick: () => startFluencySession(10, 'warmup')"), 'class-day warmup must use a ten-minute plan');
 assert(appSource.includes("item.kind === 'warmup'"), 'completed warmups must not reappear later on class days');
@@ -354,7 +354,9 @@ api.setView('today');
 
 api.setView('fluency');
 assert.strictEqual(api.getState().view, 'fluency');
-assert(elements.viewRoot.innerHTML.includes('Mapa de fluência'), 'Fluency dashboard was not rendered');
+assert(elements.viewRoot.innerHTML.includes('Prática por habilidade'), 'Fluency dashboard was not rendered');
+assert(elements.viewRoot.innerHTML.includes('Desafio sem consulta'), 'transfer practice is missing');
+assert(!elements.viewRoot.innerHTML.includes('Canva completo'), 'coverage must not be assumed without a page audit');
 assert(elements.viewRoot.innerHTML.includes('Sessão de hoje'), 'daily Fluency plan missing');
 assert(elements.bottomDock.innerHTML.includes('Fluency'), 'Fluency navigation item missing');
 assert(elements.quickAdd.classList.contains('fluency-add'), 'quick add must switch to study material in Fluency');
@@ -462,13 +464,13 @@ assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mo
 assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
 assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
-assert(indexSource.includes('styles.css?v=34') && indexSource.includes('app.js?v=34') && indexSource.includes('cloud-sync.js?v=34'), 'v34 asset cache keys missing');
-assert(swSource.includes("objetivos-spatial-v34"), 'v34 service-worker cache missing');
+assert(indexSource.includes('styles.css?v=35') && indexSource.includes('app.js?v=35') && indexSource.includes('cloud-sync.js?v=35'), 'v35 asset cache keys missing');
+assert(swSource.includes("objetivos-spatial-v35"), 'v35 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
-assert(appSource.includes("freshUrl.searchParams.set('build', '34')"), 'PWA refresh must point to build 34');
-assert(appSource.includes("serviceWorker.register('./sw.js?v=34')"), 'PWA must register the build 34 service worker');
+assert(appSource.includes("freshUrl.searchParams.set('build', '35')"), 'PWA refresh must point to build 35');
+assert(appSource.includes("serviceWorker.register('./sw.js?v=35')"), 'PWA must register the build 35 service worker');
 assert(swSource.includes("fetch(event.request, { cache: 'no-store' })"), 'PWA navigation must bypass stale iOS caches');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
 ['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {

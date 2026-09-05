@@ -7,3 +7,4 @@ private/
 *.private.json
 fluency-curriculum.private.js
 fluency-curriculum.js
+node_modules/

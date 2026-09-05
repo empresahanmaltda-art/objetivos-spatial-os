@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>DOM regression fixture</title>
+<button id="run">Run DOM regression</button><pre id="result">Ready</pre><div id="fixture"></div>
+<script src="../dom-patch.js"></script><script>
+document.querySelector('#run').onclick = () => {
+  const root = document.querySelector('#fixture');
+  const assert = (condition, message) => { if (!condition) throw Error(message); };
+  const card = id => `<article data-task-id="${id}" data-task-date="2026-09-05"><button>${id}</button></article>`;
+  try {
+    root.innerHTML = `<section><div class="task-list">${card('a')}${card('b')}${card('c')}</div><input id="answer" value=""><section id="completedDrawer" class="open"><button class="completed-toggle" aria-expanded="true">Done</button></section></section>`;
+    const b = root.querySelector('[data-task-id="b"]'), c = root.querySelector('[data-task-id="c"]');
+    const section = root.firstChild, field = root.querySelector('#answer');
+    field.focus(); field.value = 'unfinished answer'; field.setSelectionRange(3, 3);
+    ObjetivosDOM.patch(root, `<section><div class="task-list">${card('b')}${card('c')}</div><input id="answer" value=""><section id="completedDrawer"><button class="completed-toggle" aria-expanded="false">Done: 1</button></section></section>`);
+    assert(root.firstChild === section, 'view container was replaced');
+    assert(root.querySelector('[data-task-id="b"]') === b && root.querySelector('[data-task-id="c"]') === c, 'untouched task cards were replaced');
+    assert(!root.querySelector('[data-task-id="a"]'), 'completed task was not removed');
+    assert(document.activeElement === field && field.value === 'unfinished answer' && field.selectionStart === 3, 'typing focus or draft was lost');
+    assert(root.querySelector('#completedDrawer').classList.contains('open'), 'drawer collapsed');
+    assert(root.querySelector('.completed-toggle').getAttribute('aria-expanded') === 'true', 'drawer accessibility state was lost');
+    ObjetivosDOM.patch(root, `<section><div class="task-list">${card('c')}${card('b')}</div><input id="answer" value="checked" disabled></section>`);
+    assert(root.querySelector('.task-list').firstChild === c, 'keyed reordering replaced a card');
+    assert(field.disabled && field.value === 'checked', 'answer reveal did not update the field');
+    document.querySelector('#result').textContent = 'PASS: DOM identity, task removal, keyed reorder, focused draft, caret, drawer, answer reveal';
+  } catch (error) { document.querySelector('#result').textContent = 'FAIL: ' + error.message; }
+};
+</script></html>

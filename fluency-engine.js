@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const ENGINE_VERSION = 4;
+  const ENGINE_VERSION = 5;
   const DAY_MS = 86400000;
   const FORGETTING_DECAY = -.5;
   const FORGETTING_FACTOR = 19 / 81;
@@ -10,7 +10,7 @@
   const MODE_SKILLS = {
     recognition: 'reading',
     recall: 'writing',
-    cloze: 'interaction',
+    cloze: 'writing',
     listening: 'listening',
     shadowing: 'speaking'
   };
@@ -187,6 +187,8 @@
       items: starter,
       events: [],
       sessions: [],
+      transferChecks: [],
+      transferDraft: null,
       activeSession: null,
       streak: { current: 0, best: 0, lastStudyDate: '' },
       curriculumLessons: [],
@@ -229,6 +231,7 @@
       mnemonicAssociation: String(input.mnemonicAssociation || '').trim().slice(0, 900),
       pronunciationTip: String(input.pronunciationTip || '').trim().slice(0, 700),
       sourceQuote: String(input.sourceQuote || '').trim().slice(0, 700),
+      sourcePages: [...new Set((Array.isArray(input.sourcePages) ? input.sourcePages : []).map(Number).filter((page) => Number.isInteger(page) && page > 0 && page <= 2000))],
       modePriority: VALID_MODES.includes(input.modePriority) ? input.modePriority : '',
       tags: Array.isArray(input.tags) ? input.tags.map((tag) => String(tag).slice(0, 40)).slice(0, 12) : [],
       createdAt: Number(input.createdAt) || Date.now(),
@@ -265,7 +268,11 @@
       date: /^\d{4}-\d{2}-\d{2}$/.test(String(input.date || '')) ? String(input.date) : '',
       summary: String(input.summary || '').trim().slice(0, 700),
       externalUrl: String(input.externalUrl || '').trim().slice(0, 1200),
-      pageCount: Math.max(0, Number(input.pageCount) || 0)
+      pageCount: Math.max(0, Number(input.pageCount) || 0),
+      coverageReviewedAt: /^\d{4}-\d{2}-\d{2}$/.test(String(input.coverageReviewedAt || '')) ? String(input.coverageReviewedAt) : '',
+      excludedPages: (Array.isArray(input.excludedPages) ? input.excludedPages : [])
+        .filter((entry) => Number.isInteger(Number(entry.page)) && Number(entry.page) > 0 && String(entry.reason || '').trim())
+        .map((entry) => ({ page: Number(entry.page), reason: String(entry.reason).slice(0, 200) }))
     };
   }
 
@@ -315,6 +322,17 @@
       sources,
       items,
       curriculumLessons,
+      transferChecks: (Array.isArray(input.transferChecks) ? input.transferChecks : []).slice(-365).map((entry) => ({
+        id: String(entry.id || uid('transfer')).slice(0, 100),
+        lessonId: String(entry.lessonId || '').slice(0, 100),
+        itemIds: (Array.isArray(entry.itemIds) ? entry.itemIds : []).map(String).slice(0, 3),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date || '')) ? entry.date : localISO(),
+        answer: String(entry.answer || '').slice(0, 4000),
+        withoutHelp: Boolean(entry.withoutHelp),
+        spokeWithoutReading: Boolean(entry.spokeWithoutReading),
+        rating: clamp(Number(entry.rating) || 1, 1, 3),
+        evaluation: 'self'
+      })),
       events: Array.isArray(input.events) ? input.events.slice(-3000) : [],
       sessions: Array.isArray(input.sessions) ? input.sessions.slice(-365) : [],
       activeSession: input.activeSession && typeof input.activeSession === 'object' ? input.activeSession : null,
@@ -499,7 +517,7 @@
     const recent = state.events.slice(-240);
     const skills = ['reading', 'listening', 'speaking', 'writing', 'interaction'];
     return Object.fromEntries(skills.map((skill) => {
-      const events = recent.filter((event) => (event.skill || MODE_SKILLS[event.mode]) === skill);
+      const events = recent.filter((event) => (MODE_SKILLS[event.mode] || event.skill) === skill);
       if (!events.length) return [skill, { score: 0, reviews: 0, level: state.profile.skillLevels[skill] || 'A1' }];
       const weighted = events.reduce((sum, event, index) => {
         const rating = Number(event.rating) || 1;
@@ -581,6 +599,37 @@
     return clamp(Math.round(50 + scheduling.reps * 6 + Math.log2(1 + scheduling.stability) * 8 - scheduling.lapses * 5), 45, 100);
   }
 
+  function lessonEvidence(state, lesson, items, date = localISO()) {
+    const ids = new Set(items.map((item) => item.id));
+    // Only written, unassisted, correct retrieval on separate days counts here.
+    // Self-rated recognition/shadowing never becomes an objective speaking score.
+    const successes = state.events.filter((event) => ids.has(event.itemId)
+      && ['recall', 'listening'].includes(event.mode) && event.verdict === 'exact'
+      && Number(event.rating) >= 2 && event.assisted === false);
+    const retained = items.filter((item) => {
+      const days = [...new Set(successes.filter((event) => event.itemId === item.id).map((event) => event.date))].sort();
+      return days.length >= 2 && dayDiff(days[0], days[days.length - 1]) >= 7 && dayDiff(days[days.length - 1], date) <= 30;
+    }).length;
+    const mapped = new Set(items.flatMap((item) => item.sourcePages).filter((page) => page <= lesson.pageCount));
+    const excluded = new Set(lesson.excludedPages.map((entry) => entry.page).filter((page) => page <= lesson.pageCount));
+    const accounted = new Set([...mapped, ...excluded]);
+    const coverageVerified = Boolean(lesson.pageCount && lesson.coverageReviewedAt && accounted.size === lesson.pageCount);
+    const attempts = state.transferChecks.filter((entry) => entry.lessonId === lesson.id);
+    return { retained, total: items.length, mappedPages: mapped.size, excludedPages: excluded.size,
+      pageCount: lesson.pageCount, coverageVerified, transferAttempts: attempts.length,
+      lastTransfer: attempts[attempts.length - 1] || null };
+  }
+
+  function buildTransferCheck(input, date = localISO()) {
+    const state = sanitizeState(input);
+    const latest = state.curriculumLessons[state.curriculumLessons.length - 1];
+    const candidates = state.items.filter((item) => !item.suspended && (!latest || item.lessonId === latest.id));
+    const attempts = state.transferChecks.filter((entry) => entry.lessonId === (latest?.id || '')).length;
+    const items = candidates.length ? [candidates[attempts % candidates.length], candidates[(attempts + 1) % candidates.length]] : [];
+    return { lessonId: latest?.id || '', title: latest ? `Aula ${latest.number} · ${latest.title}` : 'Base atual',
+      date, items: [...new Map(items.map((item) => [item.id, item])).values()] };
+  }
+
   function curriculumProgress(input) {
     const state = sanitizeState(input);
     if (!state.curriculumLessons.length) return { lessons: [], current: null, overall: 0, mastered: 0, focusLessons: [] };
@@ -588,7 +637,7 @@
       const items = state.items.filter((item) => item.lessonId === lesson.id && !item.suspended);
       const mastery = items.length ? Math.round(items.reduce((sum, item) => sum + itemMastery(item), 0) / items.length) : 0;
       const reviewed = items.filter((item) => item.scheduling.reps > 0).length;
-      return { ...lesson, itemCount: items.length, reviewed, mastery, status: 'mapped' };
+      return { ...lesson, itemCount: items.length, reviewed, mastery, evidence: lessonEvidence(state, lesson, items), status: 'mapped' };
     });
     const current = lessons[lessons.length - 1];
     const earlierGaps = lessons
@@ -609,6 +658,7 @@
     ENGINE_VERSION,
     VALID_LEVELS,
     VALID_MODES,
+    buildTransferCheck,
     MODE_SKILLS,
     localISO,
     addDays,

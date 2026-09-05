@@ -2,6 +2,7 @@
   'use strict';
 
   const DIRTY_KEY = 'objetivos-cloud-dirty-v1';
+  const OWNER_KEY = 'objetivos-cloud-owner-v1';
   const CONFIG = window.OBJETIVOS_CLOUD_CONFIG || {};
   window.OBJETIVOS_PUSH_ACTIVE = null;
   const runtime = {
@@ -14,6 +15,9 @@
     syncing: false,
     initialSyncPromise: null,
     pendingHash: '',
+    queuedUpload: null,
+    uploadPromise: null,
+    ownHashes: new Set(),
     error: '',
     pushActive: null
   };
@@ -35,7 +39,11 @@
   }
 
   function hashState(input) {
-    return JSON.stringify(cloudPayload(input));
+    // Postgres JSONB does not preserve object-key order. Array order is meaningful.
+    const canonical = (value) => Array.isArray(value) ? value.map(canonical)
+      : value && typeof value === 'object'
+        ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
+    return JSON.stringify(canonical(cloudPayload(input)));
   }
 
   function setTopStatus(label, saving = false) {
@@ -72,42 +80,70 @@
   }
 
   async function uploadState(input, { force = false } = {}) {
-    if (!runtime.session || !runtime.client || runtime.applying || runtime.syncing) return false;
+    if (!runtime.session || !runtime.client || runtime.applying) return false;
+    if (localStorage.getItem(OWNER_KEY) !== runtime.session.user.id) return false;
     const payload = cloudPayload(input);
-    const nextHash = JSON.stringify(payload);
-    if (!force && nextHash === runtime.lastHash && localStorage.getItem(DIRTY_KEY) !== '1') return true;
-    runtime.syncing = true;
-    runtime.pendingHash = nextHash;
-    setTopStatus('sincronizando…', true);
-    setRuntimeStatus({ syncing: true, error: '' });
-    const clientUpdatedAt = new Date().toISOString();
-    const { error } = await runtime.client.from('user_state').upsert({
-      user_id: runtime.session.user.id,
-      payload: { ...payload, cloudUpdatedAt: clientUpdatedAt },
-      client_updated_at: clientUpdatedAt,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-    }, { onConflict: 'user_id' });
-    runtime.syncing = false;
-    if (error) {
-      if (runtime.pendingHash === nextHash) runtime.pendingHash = '';
-      setRuntimeStatus({ syncing: false, error: error.message || 'Falha ao sincronizar.' });
-      setTopStatus('salvo neste aparelho');
-      return false;
-    }
-    runtime.lastHash = nextHash;
-    if (runtime.pendingHash === nextHash) runtime.pendingHash = '';
-    localStorage.setItem(DIRTY_KEY, '0');
-    setRuntimeStatus({ syncing: false, error: '' });
-    setTopStatus('sincronizado');
-    return true;
+    const nextHash = hashState(payload);
+    if (!force && !runtime.uploadPromise && !runtime.queuedUpload && nextHash === runtime.lastHash && localStorage.getItem(DIRTY_KEY) !== '1') return true;
+    runtime.queuedUpload = { payload, hash: nextHash, userId: runtime.session.user.id };
+    localStorage.setItem(DIRTY_KEY, '1');
+    return flushUploads();
+  }
+
+  async function flushUploads() {
+    if (runtime.uploadPromise) return runtime.uploadPromise;
+    clearTimeout(runtime.uploadTimer);
+    runtime.uploadPromise = (async () => {
+      while (runtime.queuedUpload && runtime.session && runtime.client) {
+        const job = runtime.queuedUpload;
+        runtime.queuedUpload = null;
+        if (job.userId !== runtime.session.user.id || localStorage.getItem(OWNER_KEY) !== job.userId) return false;
+        runtime.pendingHash = job.hash;
+        setTopStatus('sincronizando…', true);
+        setRuntimeStatus({ syncing: true, error: '' });
+        const clientUpdatedAt = new Date().toISOString();
+        runtime.ownHashes.add(`${clientUpdatedAt}:${job.hash}`);
+        if (runtime.ownHashes.size > 32) runtime.ownHashes.delete(runtime.ownHashes.values().next().value);
+        let failure;
+        try {
+          const { error } = await runtime.client.from('user_state').upsert({
+            user_id: job.userId,
+            payload: { ...job.payload, cloudUpdatedAt: clientUpdatedAt },
+            client_updated_at: clientUpdatedAt,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+          }, { onConflict: 'user_id' });
+          failure = error;
+        } catch (error) { failure = error; }
+        if (runtime.session?.user.id !== job.userId) return false;
+        runtime.pendingHash = '';
+        if (failure) {
+          // Keep the newest snapshot and the persisted dirty flag for an explicit,
+          // online, foreground or subsequent-edit retry. Never report a false success.
+          runtime.queuedUpload ||= job;
+          localStorage.setItem(DIRTY_KEY, '1');
+          setRuntimeStatus({ syncing: false, error: failure.message || 'Falha ao sincronizar.' });
+          setTopStatus('salvo neste aparelho');
+          return false;
+        }
+        runtime.lastHash = job.hash;
+      }
+      localStorage.setItem(DIRTY_KEY, '0');
+      setRuntimeStatus({ syncing: false, error: '' });
+      setTopStatus('sincronizado');
+      return true;
+    })();
+    try { return await runtime.uploadPromise; }
+    finally { runtime.uploadPromise = null; runtime.syncing = false; }
   }
 
   function scheduleUpload(input) {
     const nextHash = hashState(input);
-    if (runtime.applying || nextHash === runtime.lastHash) return;
+    if (runtime.applying || (!runtime.uploadPromise && !runtime.queuedUpload && nextHash === runtime.lastHash)) return;
     localStorage.setItem(DIRTY_KEY, '1');
+    // Queue immediately, not after debounce: an older request may finish meanwhile.
+    if (runtime.session) runtime.queuedUpload = { payload: cloudPayload(input), hash: nextHash, userId: runtime.session.user.id };
     clearTimeout(runtime.uploadTimer);
-    runtime.uploadTimer = setTimeout(() => uploadState(input), 650);
+    runtime.uploadTimer = setTimeout(() => runtime.session && flushUploads(), 650);
   }
 
   function applyRemote(payload) {
@@ -116,7 +152,7 @@
     const clean = clone(payload);
     delete clean.cloudUpdatedAt;
     api()?.applyCloudState?.(clean);
-    runtime.lastHash = JSON.stringify(clean);
+    runtime.lastHash = hashState(clean);
     runtime.pendingHash = '';
     localStorage.setItem(DIRTY_KEY, '0');
     runtime.applying = false;
@@ -125,20 +161,30 @@
 
   async function performInitialSync() {
     if (!runtime.session || !runtime.client) return;
+    const userId = runtime.session.user.id;
+    const owner = localStorage.getItem(OWNER_KEY);
+    if (owner && owner !== userId) throw new Error('Este aparelho contém dados de outra conta. Entre com a conta original para preservá-los.');
     setTopStatus('sincronizando…', true);
     const { data, error } = await runtime.client
       .from('user_state')
       .select('payload,client_updated_at')
       .eq('user_id', runtime.session.user.id)
       .maybeSingle();
+    if (runtime.session?.user.id !== userId) return;
     if (error) {
       setRuntimeStatus({ error: error.message || 'Falha ao carregar dados.' });
       setTopStatus('salvo neste aparelho');
       return;
     }
     const localState = api()?.getState?.();
-    if (data?.payload && localStorage.getItem(DIRTY_KEY) !== '1') applyRemote(data.payload);
-    else await uploadState(localState, { force: true });
+    if (!owner && !data?.payload && localState?.fluency?.curriculumLessons?.length) {
+      throw new Error('Não foi possível confirmar que esta conta é dona das aulas locais. Entre com a conta original; nenhum material foi enviado.');
+    }
+    localStorage.setItem(OWNER_KEY, userId);
+    if (data?.payload && localStorage.getItem(DIRTY_KEY) !== '1' && !runtime.uploadPromise) {
+      if (hashState(data.payload) !== runtime.lastHash) applyRemote(data.payload);
+    }
+    else if (!await uploadState(localState, { force: true })) return;
     subscribeRealtime();
     setRuntimeStatus({ error: '' });
   }
@@ -165,7 +211,10 @@
         const payload = event.new?.payload;
         if (!payload || runtime.applying) return;
         const remoteHash = hashState(payload);
-        if (remoteHash !== runtime.lastHash && remoteHash !== runtime.pendingHash) applyRemote(payload);
+        if (remoteHash === runtime.lastHash || remoteHash === runtime.pendingHash || runtime.ownHashes.has(`${payload.cloudUpdatedAt || ''}:${remoteHash}`)) return;
+        // A full remote snapshot must not erase local edits waiting to be saved.
+        if (runtime.queuedUpload || runtime.uploadPromise || localStorage.getItem(DIRTY_KEY) === '1') return;
+        applyRemote(payload);
       })
       .subscribe();
   }
@@ -359,12 +408,21 @@
       if (session) {
         if (!wasSignedIn) setAuthGate({ busy: true, message: 'Preparando seu espaço…' });
         setTimeout(async () => {
-          await initialSync();
-          setAuthGate({ unlocked: true, message: 'Tudo sincronizado.' });
+          try {
+            await initialSync();
+            if (runtime.session?.user.id === session.user.id) setAuthGate({ unlocked: true, message: runtime.error ? 'Dados locais disponíveis.' : 'Tudo sincronizado.' });
+          } catch (error) {
+            setRuntimeStatus({ error: error.message });
+            setAuthGate({ message: error.message });
+          }
         }, 0);
       }
       else {
+        if (runtime.channel) runtime.client.removeChannel(runtime.channel);
         runtime.channel = null;
+        clearTimeout(runtime.uploadTimer);
+        runtime.queuedUpload = null;
+        runtime.ownHashes.clear();
         setTopStatus('salvo neste aparelho');
         refreshSettings();
         setAuthGate({ message: 'Entre com sua conta Google para continuar.' });

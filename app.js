@@ -1041,6 +1041,7 @@
 
   function animatedToggleTask(button, taskId, date) {
     const card = button?.closest?.('.task-card');
+    if (card?.classList.contains('is-confirming')) return;
     if (!card || state.settings.motion === false) {
       toggleTask(taskId, date);
       return;
@@ -1127,7 +1128,7 @@
             <div class="summary-copy"><strong>Atrasadas</strong><span>${overdue.length}</span></div>
             <div class="summary-actions"><button class="chip-button" data-action="moveOverdueToday" type="button">Reagendar para hoje</button></div>
           </div>
-          <div class="task-list">${overdue.map((task) => taskCard(task, task.date, { overdue: true })).join('')}</div>
+          <div class="task-list" data-patch-key="overdue-tasks">${overdue.map((task) => taskCard(task, task.date, { overdue: true })).join('')}</div>
         ` : ''}
 
         <div class="summary-row">
@@ -1140,7 +1141,7 @@
           </div>
         </div>
 
-        ${pending.length ? `<div class="task-list">${pending.map((task) => taskCard(task, state.selectedDate)).join('')}</div>` : emptyTasks(state.selectedDate)}
+        ${pending.length ? `<div class="task-list" data-patch-key="pending-tasks">${pending.map((task) => taskCard(task, state.selectedDate)).join('')}</div>` : emptyTasks(state.selectedDate)}
         ${completedDrawer(completed, state.selectedDate)}
       </div>
     `;
@@ -1369,7 +1370,7 @@
       <article class="fluency-skill-card">
         <div><span>${esc(fluencySkillLabels[skill])}</span><strong>${esc(metric.level)}</strong></div>
         <div class="fluency-skill-track"><i style="width:${score}%"></i></div>
-        <small>${metric.reviews ? `${score}% de precisão recente · ${metric.reviews} revisões` : 'Aguardando calibração'}</small>
+        <small>${metric.reviews ? `${score}% nas suas avaliações · ${metric.reviews} revisões` : 'Sem evidência suficiente'}</small>
       </article>
     `;
   }
@@ -1430,23 +1431,31 @@
           <div class="fluency-course-summary">
             <div class="fluency-course-number">${String(currentLesson.number).padStart(2, '0')}</div>
             <div class="fluency-course-copy">
-              <small>Aula atual · Canva completo · Aula ${currentLesson.number}</small>
+              <small>Aula atual · Material da professora · Aula ${currentLesson.number}</small>
               <strong>${esc(currentLesson.title)}</strong>
               <p>${esc(currentLesson.summary || 'Conteúdo particular sincronizado com segurança.')}</p>
               <div class="fluency-course-track"><i style="width:${currentLesson.mastery}%"></i></div>
-              <span>${currentLesson.reviewed}/${currentLesson.itemCount} bases recuperadas · ${currentLesson.mastery}% consolidado</span>
+              <span>${currentLesson.reviewed}/${currentLesson.itemCount} bases revisadas · ${currentLesson.mastery}% de memória estimada</span>
             </div>
-            <div class="fluency-course-total"><strong>${curriculum.overall}%</strong><span>curso consolidado</span></div>
+            <div class="fluency-course-total"><strong>${curriculum.overall}%</strong><span>memória estimada</span></div>
           </div>
           <div class="fluency-lesson-preview">
-            ${lessonPreview.map((lesson) => `<article class="${lesson.status}"><span>${String(lesson.number).padStart(2, '0')}</span><div><strong>${esc(lesson.title)}</strong><small>${lesson.status === 'current' ? 'Em calibração agora' : lesson.status === 'next' ? 'Próxima base' : lesson.mastery ? `${lesson.mastery}% consolidado` : 'Mapeada e aguardando'}</small></div><i>${lesson.mastery}%</i></article>`).join('')}
+            ${lessonPreview.map((lesson) => `<article class="${lesson.status}"><span>${String(lesson.number).padStart(2, '0')}</span><div><strong>${esc(lesson.title)}</strong><small>${lesson.status === 'current' ? 'Foco atual' : lesson.status === 'next' ? 'Lacuna anterior' : lesson.mastery ? 'Estimativa de memória' : 'Mapeada e aguardando'}</small></div><i>${lesson.mastery}%</i></article>`).join('')}
           </div>
           <p class="fluency-course-note">Você já estudou ${lessonCount} aula${lessonCount === 1 ? '' : 's'}. A mais recente${latestLesson ? ` — Aula ${latestLesson.number}: ${esc(latestLesson.title)}` : ''} entra obrigatoriamente em toda sessão; o restante vem das lacunas acumuladas até você conseguir usar tudo sem consultar.</p>
         </section>` : ''}
 
         <section class="fluency-section">
-          <div class="fluency-section-head"><div><span>Mapa de fluência</span><strong>Cada habilidade evolui separadamente</strong></div><small>${summary.mature}/${summary.total} cartões maduros</small></div>
+          <div class="fluency-section-head"><div><span>Prática por habilidade</span><strong>Cartões não são uma certificação de fluência</strong></div><small>${summary.mature}/${summary.total} cartões em revisão</small></div>
           <div class="fluency-skill-grid">${Object.entries(metrics).map(([skill, metric]) => fluencySkillCard(skill, metric)).join('')}</div>
+          <p class="fluency-course-note">Níveis A1–C2 são informados no perfil, não calculados pelas notas. Fala espontânea e interação precisam de prática com pessoas e feedback.</p>
+        </section>
+
+        <section class="fluency-section" data-patch-key="fluency-evidence">
+          <div class="fluency-section-head"><div><span>Além dos cartões</span><strong>Use a aula em uma situação nova</strong></div><button class="chip-button" data-action="fluencyTransfer" type="button">Desafio sem consulta</button></div>
+          <p class="fluency-course-note">Escreva frases próprias, fale sem ler e tente uma pergunta e resposta. Guarde sua tentativa para revisar aqui ou com sua professora. O app não corrige automaticamente a fala.</p>
+          ${currentLesson ? `<p class="fluency-course-note">Aula ${currentLesson.number}: ${currentLesson.evidence.retained}/${currentLesson.itemCount} bases recuperadas por escrito, sem ajuda, em dias separados por pelo menos 7 dias e com acerto nos últimos 30 dias. ${currentLesson.evidence.transferAttempts} desafio(s) de uso próprio.</p>
+          <p class="fluency-course-note">${currentLesson.evidence.coverageVerified ? 'Cobertura do material conferida por página.' : 'Cobertura integral ainda não comprovada por página; a quantidade de cartões não comprova que todo o Canva foi coberto.'}</p>` : ''}
         </section>
 
         <section class="fluency-section" id="fluencySources">
@@ -1479,7 +1488,7 @@
           ${viewHead('Sessão concluída', 'Boa. O cérebro trabalhou.', `${total} recuperações · ${accuracy}% de precisão`, '')}
           <section class="fluency-complete-card">
             <div class="fluency-complete-orbit">✓</div>
-            <h2>Conteúdo consolidado</h2>
+            <h2>Revisão registrada</h2>
             <p>O próximo intervalo de cada item foi recalculado pela dificuldade, pelo histórico e pela qualidade desta resposta.</p>
             <div class="fluency-complete-stats"><span><strong>${session.correct}</strong> firmes</span><span><strong>${session.minor}</strong> quase</span><span><strong>${session.missed}</strong> recuperar</span></div>
             <button class="primary-button" data-action="finishFluency" type="button">Voltar ao painel</button>
@@ -1588,7 +1597,10 @@
     const current = currentFluencyEntry();
     if (!current || !current.session.revealed) return;
     const { session, entry, item } = current;
-    const value = clamp(Number(rating) || 1, 1, 3);
+    const requested = clamp(Number(rating) || 1, 1, 3);
+    const failed = ['wrong', 'empty'].includes(session.comparison?.verdict);
+    const value = failed ? 1 : requested;
+    if (failed && requested > 1) toast('A resposta não coincidiu com o gabarito: volta como Difícil. Confira possíveis alternativas com sua professora.');
     const updated = Fluency.scheduleReview(item, value, session.date, state.fluency.settings.requestRetention);
     const itemIndex = state.fluency.items.findIndex((candidate) => candidate.id === item.id);
     state.fluency.items[itemIndex] = updated;
@@ -1608,6 +1620,7 @@
       rating: value,
       ratingScale: 3,
       verdict,
+      assisted: Boolean(session.usedHint),
       score: Number.isFinite(Number(session.comparison?.score)) ? Number(session.comparison.score) : ({ 1: .25, 2: .8, 3: 1 }[value]),
       createdAt: new Date().toISOString()
     });
@@ -1616,6 +1629,7 @@
     session.revealed = false;
     session.comparison = null;
     session.answer = '';
+    session.usedHint = false;
     if (session.index >= session.queue.length) {
       session.completedAt = new Date().toISOString();
       state.fluency.sessions.push({
@@ -1671,7 +1685,11 @@
     const root = $('#viewRoot');
     root.dataset.direction = motionDirection;
     root.dataset.update = quiet ? 'quiet' : 'animated';
-    root.innerHTML = (views[state.view] || renderToday)();
+    const markup = (views[state.view] || renderToday)();
+    if (quiet && globalThis.ObjetivosDOM && root.dataset.renderedView === state.view) {
+      globalThis.ObjetivosDOM.patch(root, markup);
+    } else root.innerHTML = markup;
+    root.dataset.renderedView = state.view;
     const quickAdd = $('#quickAdd');
     if (quickAdd) {
       quickAdd.setAttribute('aria-label', state.view === 'fluency' ? 'Adicionar material de estudo' : 'Adicionar tarefa');
@@ -2032,6 +2050,48 @@
     }
   }
 
+  function fluencyTransferModal() {
+    const plan = Fluency.buildTransferCheck(state.fluency);
+    if (!plan.items.length) { toast('Ainda não há cartões nesta aula. Envie o material aqui na conversa.'); return; }
+    const previous = state.fluency.transferChecks?.filter((entry) => entry.lessonId === plan.lessonId).at(-1);
+    const draft = state.fluency.transferDraft?.lessonId === plan.lessonId ? state.fluency.transferDraft.answer : '';
+    openModal(`
+      <div class="modal-head"><div><h2>Desafio sem consulta</h2><p>${esc(plan.title)}</p></div><button class="icon-button modal-close" type="button" aria-label="Fechar">×</button></div>
+      <form id="fluencyTransferForm" class="fluency-transfer-form">
+        <p>Use estas ideias em 2 ou 3 frases novas em russo. Mude a pessoa, o lugar ou o objeto; não tente apenas repetir o cartão.</p>
+        <ul>${plan.items.map((item) => `<li>${esc(item.nativeTranslation)}</li>`).join('')}</ul>
+        <label class="fluency-answer-field"><span>Sua tentativa em russo</span><textarea id="fluencyTransferAnswer" rows="4" maxlength="4000" lang="ru" required spellcheck="false" placeholder="Escreva sem consultar…">${esc(draft || '')}</textarea></label>
+        <p>Agora fale suas frases sem ler e crie uma pergunta e resposta sobre a situação. Isso é treino livre, não avaliação automática de pronúncia.</p>
+        <label><input id="transferWithoutHelp" type="checkbox"> Escrevi sem consultar ou copiar.</label>
+        <label><input id="transferSpoke" type="checkbox"> Consegui falar sem ler.</label>
+        <label>Como foi? <select id="transferRating"><option value="1">Difícil — travei ou precisei de ajuda</option><option value="2">Bom — consegui com esforço</option><option value="3">Fácil — consegui com tranquilidade</option></select></label>
+        <p class="fluency-course-note">Autoavaliação: este registro não aumenta sua estimativa nos cartões nem certifica domínio. Traga a tentativa nesta conversa para receber feedback.</p>
+        ${previous ? `<details><summary>Minha última tentativa · ${esc(previous.date)}</summary><p lang="ru">${esc(previous.answer)}</p><small>Autoavaliação registrada; ainda requer feedback.</small></details>` : ''}
+        <div class="modal-actions"><button class="primary-button" type="submit">Guardar tentativa</button></div>
+      </form>
+    `, 'fluency-transfer-modal');
+    $('#fluencyTransferAnswer').oninput = (event) => {
+      state.fluency.transferDraft = { lessonId: plan.lessonId, answer: event.target.value.slice(0, 4000) };
+      save();
+    };
+    $('#fluencyTransferForm').onsubmit = (event) => {
+      event.preventDefault();
+      const answer = String($('#fluencyTransferAnswer')?.value || '').trim();
+      if (!/[а-яё]/i.test(answer)) { toast('Escreva sua tentativa em russo antes de guardar.'); return; }
+      state.fluency.transferChecks ||= [];
+      state.fluency.transferChecks.push({ id: Fluency.uid('transfer'), lessonId: plan.lessonId,
+        itemIds: plan.items.map((item) => item.id), date: localISO(), answer: answer.slice(0, 4000),
+        withoutHelp: Boolean($('#transferWithoutHelp')?.checked), spokeWithoutReading: Boolean($('#transferSpoke')?.checked),
+        rating: clamp(Number($('#transferRating')?.value) || 1, 1, 3), evaluation: 'self' });
+      state.fluency.transferChecks = state.fluency.transferChecks.slice(-365);
+      state.fluency.transferDraft = null;
+      save();
+      closeModal();
+      render({ quiet: true });
+      toast('Tentativa guardada. Traga-a aqui para receber feedback.');
+    };
+  }
+
   function fluencyCurriculumModal() {
     const curriculum = Fluency.curriculumProgress(state.fluency);
     const lessonCount = curriculum.lessons.length;
@@ -2047,8 +2107,8 @@
         <button class="icon-button modal-close" type="button" aria-label="Fechar">×</button>
       </div>
       <div class="fluency-curriculum-overview">
-        <article><strong>${curriculum.overall}%</strong><span>consolidação total</span></article>
-        <article><strong>${curriculum.mastered}/${lessonCount}</strong><span>aulas dominadas</span></article>
+        <article><strong>${curriculum.overall}%</strong><span>memória estimada</span></article>
+        <article><strong>${curriculum.mastered}/${lessonCount}</strong><span>memória mais estável</span></article>
         <article><strong>${state.fluency.items.filter((item) => item.lessonId).length}</strong><span>bases ativas</span></article>
       </div>
       <div class="fluency-curriculum-list">
@@ -2056,7 +2116,7 @@
           <article class="${lesson.status}">
             <div class="fluency-curriculum-index">${String(lesson.number).padStart(2, '0')}</div>
             <div class="fluency-curriculum-copy"><small>${lesson.date ? formatShortDate(lesson.date) : 'Material privado'} · ${lesson.itemCount} bases</small><strong>${esc(lesson.title)}</strong><span>${esc(lesson.summary || 'Conteúdo sincronizado somente após autenticação.')}</span><div><i style="width:${lesson.mastery}%"></i></div></div>
-            <div class="fluency-curriculum-state"><strong>${lesson.mastery}%</strong><span>${lesson.status === 'mastered' ? 'Dominada' : lesson.status === 'current' ? 'Agora' : lesson.status === 'next' ? 'Depois' : 'Mapeada'}</span>${lesson.externalUrl ? `<a href="${esc(lesson.externalUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir material da aula ${lesson.number}">↗</a>` : ''}</div>
+            <div class="fluency-curriculum-state"><strong>${lesson.mastery}%</strong><span>${lesson.status === 'mastered' ? 'Em manutenção' : lesson.status === 'current' ? 'Agora' : lesson.status === 'next' ? 'Depois' : 'Mapeada'}</span>${lesson.externalUrl ? `<a href="${esc(lesson.externalUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir material da aula ${lesson.number}">↗</a>` : ''}</div>
           </article>
         `).join('')}
       </div>
@@ -2938,11 +2998,15 @@
       rateFluency: () => rateFluencyCard(rating),
       finishFluency: finishFluencySession,
       fluencyCurriculum: fluencyCurriculumModal,
+      fluencyTransfer: fluencyTransferModal,
       fluencyProfile: fluencyProfileModal,
       addFluencySource: fluencySourceModal,
       speakFluency: () => {
         const current = currentFluencyEntry();
-        if (current) speakRussian(current.item.targetPhrase);
+        if (current) {
+          if (!current.session.revealed && !['listening', 'shadowing'].includes(current.entry.mode)) current.session.usedHint = true;
+          speakRussian(current.item.targetPhrase);
+        }
       },
       speakFluencySample: () => speakRussian('Привет! Я изучаю русский язык.'),
       toggleCompletedDrawer: () => {
@@ -3008,10 +3072,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '34');
+      freshUrl.searchParams.set('build', '35');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=34').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=35').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {

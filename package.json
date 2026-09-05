@@ -1,0 +1,9 @@
+{
+  "name": "objetivos-spatial-os",
+  "private": true,
+  "version": "35.0.0",
+  "scripts": {
+    "test": "node tests/fluency.js && node tests/smoke.js && node tests/cloud-sync.js && node tests/sync-regressions.js && node tests/dom.js"
+  },
+  "devDependencies": { "jsdom": "30.0.1" }
+}
