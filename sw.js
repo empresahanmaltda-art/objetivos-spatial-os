@@ -1,5 +1,5 @@
-const CACHE = 'objetivos-spatial-v35';
-const ASSETS = ['./', './index.html', './styles.css?v=35', './dom-patch.js?v=35', './fluency-engine.js?v=35', './app.js?v=35', './cloud-config.js?v=21', './cloud-sync.js?v=35', './manifest.webmanifest?v=21', './assets/os-icon-v18-180.png', './assets/os-icon-v18-192.png', './assets/os-icon-v18-512.png'];
+const CACHE = 'objetivos-spatial-v36';
+const ASSETS = ['./', './index.html', './styles.css?v=36', './dom-patch.js?v=36', './fluency-engine.js?v=36', './personal-resources.js?v=36', './sound-engine.js?v=36', './app.js?v=36', './cloud-config.js?v=21', './cloud-sync.js?v=36', './manifest.webmanifest?v=21', './assets/os-icon-v18-180.png', './assets/os-icon-v18-192.png', './assets/os-icon-v18-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -52,12 +52,29 @@ self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
     const duplicates = await self.registration.getNotifications({ tag });
     duplicates.forEach((notification) => notification.close());
+    // A page can use Web Audio after a gesture. The worker cannot play a custom
+    // sound itself. Keep the OS sound unless a visible page confirms playback.
+    let customPlayed = false;
+    try {
+      const windows = await self.clients.matchAll({ type: 'window' });
+      const foreground = windows.find(client => client.visibilityState === 'visible' && client.focused)
+        || windows.find(client => client.visibilityState === 'visible');
+      customPlayed = foreground ? await new Promise(resolve => {
+        const channel = new MessageChannel();
+        const finish = played => { clearTimeout(timer); channel.port1.close(); resolve(played); };
+        const timer = setTimeout(() => finish(false), 250);
+        channel.port1.onmessage = event => finish(event.data?.played === true);
+        try { foreground.postMessage({ type: 'objetivos:push-sound', tag }, [channel.port2]); }
+        catch { channel.port2.close(); finish(false); }
+      }) : false;
+    } catch { /* A closing tab must not prevent delivery of the notification. */ }
     await self.registration.showNotification(title, {
       body: data.body || 'Uma tarefa da sua rotina está começando.',
       icon: './assets/os-icon-v18-192.png',
       badge: './assets/os-icon-v18-192.png',
       tag,
       renotify: false,
+      ...(customPlayed ? { silent: true } : {}),
       data: { url: data.url || './', ...(data.data || {}) }
     });
   })());

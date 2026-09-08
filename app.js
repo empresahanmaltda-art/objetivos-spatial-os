@@ -17,6 +17,9 @@
   const Fluency = globalThis.FluencyEngine;
   if (!Fluency) throw new Error('Fluency Engine não foi carregado.');
   let state = null;
+  const Resources = globalThis.ObjetivosResources;
+  const Sounds = globalThis.ObjetivosSound;
+  const sound = (event) => { Sounds?.configure(state?.settings); return Sounds?.play(event); };
 
   function localISO(date = new Date()) {
     const year = date.getFullYear();
@@ -293,6 +296,9 @@
       savedThemes: [],
       haptics: true,
       motion: true,
+      soundEffects: true,
+      soundVolume: .35,
+      soundAssignments: {},
       notificationsEnabled: false,
       swipeLeft: 'complete',
       swipeRight: 'schedule',
@@ -821,6 +827,7 @@
       save();
       render({ quiet: true });
       haptic('success');
+      sound('complete');
       toast(`Concluída. Próxima: ${formatShortDate(nextDate)}.`, {
         actionLabel: 'Desfazer',
         onAction: () => {
@@ -831,6 +838,7 @@
           save();
           render({ quiet: true });
           haptic('select');
+          sound('undo');
         },
         duration: 5000
       });
@@ -846,6 +854,7 @@
     save();
     render({ quiet: true });
     haptic(done ? 'select' : 'success');
+    sound(done ? 'undo' : 'complete');
     toast(done ? 'Tarefa devolvida para a lista.' : 'Concluída e arquivada.');
   }
 
@@ -870,6 +879,7 @@
     }, state.projects.length);
     if (existing) Object.assign(existing, project);
     else state.projects.push(project);
+    if (!existing) sound('create');
     state.selectedProject = project.id;
     state.plannerDate = '';
     save();
@@ -928,6 +938,7 @@
     if (!task.title) return null;
     if (existing) Object.assign(existing, task);
     else state.tasks.push(task);
+    if (!existing) sound('create');
     save();
     render();
     return task;
@@ -935,6 +946,7 @@
 
   function upsertGoal(data, existingId = null) {
     const existing = state.goals.find((goal) => goal.id === existingId);
+    const previouslyReached = existing && Number(existing.current) >= Number(existing.target);
     const goal = {
       id: existing?.id || uid('goal'),
       title: String(data.title || '').trim(),
@@ -947,6 +959,8 @@
     if (!goal.title || !goal.target) return null;
     if (existing) Object.assign(existing, goal);
     else state.goals.push(goal);
+    if (!previouslyReached && goal.current >= goal.target) sound('milestone');
+    else if (!existing) sound('create');
     save();
     render();
     return goal;
@@ -965,6 +979,7 @@
     const nextIndex = navItems.findIndex((item) => item.id === view);
     motionDirection = nextIndex >= previousIndex ? 'forward' : 'backward';
     state.view = view;
+    if (previousIndex !== nextIndex) sound('navigate');
     if (view === 'today') state.selectedDate = localISO();
     save();
     render();
@@ -1073,8 +1088,43 @@
           </div>
         </div>
         <button class="task-menu" data-action="editTask" data-id="${task.id}" type="button" aria-label="Editar tarefa">•••</button>
+        ${mealForTask(task) ? mealCard(mealForTask(task), { collapsed: completed }) : ''}
       </article>
     `;
+  }
+
+  function mealForTask(task = {}) {
+    const key = String(task.id || '').match(/^routine-v\d+-(.+)$/)?.[1];
+    return Resources?.get('nutrition')?.meals?.find(meal => meal.key === key) || null;
+  }
+
+  function mealCard(meal, { collapsed = false } = {}) {
+    const substitutes = meal.items.filter(item => item.alternatives?.length);
+    return `<details class="meal-card" data-patch-key="meal-${esc(meal.key)}" data-preserve-open ${collapsed ? '' : 'open'}>
+      <summary><span>Seu cardápio</span><small>${meal.items.length} ${meal.items.length === 1 ? 'item' : 'itens'} <span aria-hidden="true">⌄</span></small></summary>
+      <div class="meal-content">
+        <dl class="meal-foods">${meal.items.map(item => `<div><dt>${esc(item.food)}</dt><dd>${esc(item.quantity)}</dd></div>`).join('')}</dl>
+        ${substitutes.length ? `<details class="meal-substitutes" data-preserve-open><summary>Substituições do plano</summary>${substitutes.map(item => `<div><strong>No lugar de ${esc(item.food.toLowerCase())}</strong><ul>${item.alternatives.map(text => `<li>${esc(text)}</li>`).join('')}</ul></div>`).join('')}<p>Escolha uma opção no lugar do alimento correspondente.</p></details>` : ''}
+        <div class="meal-footer"><span>Plano · pág. ${Number(meal.sourcePage)}</span><button class="meal-plan-link" data-action="nutritionPlan" type="button">Ver plano e orientações ↗</button></div>
+      </div>
+    </details>`;
+  }
+
+  function nutritionModal() {
+    const plan = Resources?.get('nutrition');
+    if (!plan) { toast('O plano ainda não carregou. Conecte-se e use Atualizar em Configurações.'); return; }
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(plan.prescribedAt) ? formatPickerDate(plan.prescribedAt) : '';
+    openModal(`<div class="modal-head"><div><h2>Meu plano alimentar</h2><p>${esc(plan.title)} · Prescrito em ${esc(date)}</p></div><button class="icon-button modal-close" type="button" aria-label="Fechar">×</button></div>
+      <p class="form-note">Transcrito do seu PDF. ${esc(plan.timingNote)}${Resources.status() === 'cached' ? ' Cópia salva neste aparelho.' : ''}</p>
+      <div class="nutrition-plan">${plan.meals.map(meal => {
+        const task = state.tasks.find(task => mealForTask(task)?.key === meal.key);
+        return `<section><h3><span>${esc(meal.title)}</span><small>${esc(task?.time || 'Sem horário na rotina')}</small></h3>${mealCard(meal)}</section>`;
+      }).join('')}</div>
+      <section class="nutrition-guidance"><h3>Orientações do plano</h3><ul>${plan.guidance.map(text => `<li>${esc(text)}</li>`).join('')}</ul></section>
+      <details class="nutrition-report"><summary>Relatório nutricional do PDF</summary>
+        <p class="form-note">Valores informados no documento, sem recálculo.</p>
+        <dl class="meal-foods">${[['Proteínas',plan.reportedTotals.protein],['Lipídeos',plan.reportedTotals.fat],['Carboidratos',plan.reportedTotals.carbs],['Energia',plan.reportedTotals.kcal],...(plan.nutrients || [])].map(([label,value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>
+      </details>`, 'nutrition-modal');
   }
 
   function completedDrawer(completed, date, cardOptions = {}) {
@@ -1229,6 +1279,7 @@
         <div class="project-list-head">
           <div><span>${esc(selectedProject.shortTitle)}</span><strong>${esc(selectedProject.description)}</strong></div>
           <div class="project-list-actions">
+            ${selectedProject.id === 'gym' && Resources?.get('nutrition') ? '<button data-action="nutritionPlan" type="button">Meu cardápio</button>' : ''}
             <small>${projectEntries.length} ativa${projectEntries.length === 1 ? '' : 's'}</small>
             <button data-action="editProject" data-id="${selectedProject.id}" type="button" aria-label="Editar ${esc(selectedProject.title)}">•••</button>
             <button data-action="addTask" data-project-id="${selectedProject.id}" type="button">+ Tarefa</button>
@@ -1646,6 +1697,7 @@
       });
       state.fluency.streak = Fluency.updateStreak(state.fluency.streak, session.date);
       haptic('success');
+      sound('session');
     } else {
       haptic('select');
     }
@@ -1662,6 +1714,7 @@
   }
 
   function speakRussian(text) {
+    Sounds?.stop();
     if (!('speechSynthesis' in globalThis) || typeof SpeechSynthesisUtterance !== 'function') {
       toast('A voz russa não está disponível neste aparelho.');
       return;
@@ -1677,6 +1730,7 @@
   }
 
   function render({ quiet = false, preserveScroll = quiet } = {}) {
+    Sounds?.configure(state.settings);
     const scroller = $('#appShell');
     const previousScroll = preserveScroll ? Number(scroller?.scrollTop || 0) : 0;
     applyAppearance();
@@ -2516,6 +2570,30 @@
       </section>
       <div class="settings-list">
         <div class="setting-row">
+          <div class="setting-copy"><strong>Meu plano alimentar</strong><span>${Resources?.get('nutrition') ? 'Cardápios nos horários das refeições, com quantidades e substituições.' : 'Carregue seu plano privado nesta conta.'}</span></div>
+          <button class="soft-button" data-action="nutritionPlan" type="button">Ver plano</button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy"><strong>Seus sons e materiais</strong><span id="resourcesStatus">${Resources?.status() === 'cached' ? 'Usando a cópia salva neste aparelho.' : Resources?.status() === 'error' ? 'Não foi possível carregar. Tente atualizar.' : 'Carregados na sua conta; disponíveis neste aparelho após sincronizar.'}</span></div>
+          <button class="soft-button" id="refreshResourcesBtn" type="button">Atualizar</button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy"><strong>Sons do app</strong><span>Seus efeitos nas ações e avisos, com volume suave.</span></div>
+          <label class="native-switch"><input id="soundToggle" type="checkbox" switch ${state.settings.soundEffects !== false ? 'checked' : ''} aria-label="Ativar sons do app"/><span></span></label>
+        </div>
+        <div class="sound-settings">
+          <label class="sound-volume" for="soundVolume"><span>Volume <output id="soundVolumeValue">${Math.round(Number(state.settings.soundVolume ?? .35)*100)}%</output></span><input id="soundVolume" type="range" min="0" max="100" value="${Math.round(Number(state.settings.soundVolume ?? .35)*100)}" /></label>
+          <details><summary>Ouvir e escolher cada som</summary>
+            <p class="form-note">Use ▶ para reconhecer os seus arquivos. Você pode trocar o som de qualquer ação.</p>
+            ${Object.entries(Sounds?.events || {}).map(([key,label]) => {
+              const assets = Sounds.assets();
+              const assigned = state.settings.soundAssignments?.[key] || assets.find(asset => asset.event === key)?.id;
+              return `<div class="sound-choice"><label for="sound-${key}">${esc(label)}</label><select id="sound-${key}" data-sound-event="${key}" ${assets.length ? '' : 'disabled'}>${assets.length ? assets.map(asset => `<option value="${esc(asset.id)}" ${asset.id === assigned ? 'selected' : ''}>${esc(asset.label)}</option>`).join('') : '<option>Sons ainda não carregados</option>'}</select><button class="soft-button sound-preview" data-preview-event="${key}" type="button" aria-label="Ouvir som de ${esc(label.toLowerCase())}" ${assets.length ? '' : 'disabled'}>▶</button></div>`;
+            }).join('')}
+          </details>
+          <p class="form-note">Os sons começam após um toque. Com o app fechado, a notificação usa o som do sistema; o iPhone não permite escolher um áudio próprio para Web Push.</p>
+        </div>
+        <div class="setting-row">
           <div class="setting-copy"><strong>Lembretes neste aparelho</strong><span>${notificationPermission === 'granted' ? 'Fallback local ativo: 30 minutos antes e exatamente no horário, sem duplicar o push.' : 'Ative a permissão para receber os dois alertas de cada tarefa com horário.'}</span></div>
           <label class="native-switch"><input id="notificationToggle" type="checkbox" switch ${state.settings.notificationsEnabled ? 'checked' : ''}/><span></span></label>
         </div>
@@ -2659,6 +2737,33 @@
       startNotificationClock();
       toast(permission === 'granted' ? 'Lembretes ativados neste aparelho.' : 'Permissão de notificação não concedida.');
     };
+    $('#soundToggle').onchange = event => {
+      state.settings.soundEffects = event.target.checked;
+      Sounds?.configure(state.settings); save();
+      if (event.target.checked) sound('notification');
+    };
+    $('#soundVolume').oninput = event => {
+      state.settings.soundVolume = Number(event.target.value) / 100;
+      $('#soundVolumeValue').textContent = `${event.target.value}%`;
+      Sounds?.configure(state.settings); save();
+    };
+    $$('[data-sound-event]').forEach(select => { select.onchange = () => {
+      state.settings.soundAssignments ||= {};
+      state.settings.soundAssignments[select.dataset.soundEvent] = select.value;
+      Sounds?.configure(state.settings); save();
+    }; });
+    $$('[data-preview-event]').forEach(button => { button.onclick = async () => {
+      if (state.settings.soundEffects === false || !Number(state.settings.soundVolume)) { toast('Ative os sons e aumente o volume para ouvir.'); return; }
+      Sounds?.configure(state.settings); Sounds?.unlock();
+      const played = await Sounds?.play(button.dataset.previewEvent, { previewId: $(`#sound-${button.dataset.previewEvent}`).value });
+      if (!played) toast('O áudio não iniciou. Toque novamente para ouvir.');
+    }; });
+    $('#refreshResourcesBtn').onclick = async event => {
+      const button = event.currentTarget; button.disabled = true;
+      const success = await window.OBJETIVOS_CLOUD?.refreshResources?.();
+      if (document.contains(button)) { button.disabled = false; settingsModal(); }
+      toast(success ? 'Sons e plano atualizados.' : 'Não foi possível atualizar agora. Sua cópia salva foi mantida.');
+    };
     $('#exportBtn').onclick = exportBackup;
     $('#importBtn').onclick = () => $('#importFile').click();
     $('#importFile').onchange = async (event) => {
@@ -2673,6 +2778,7 @@
         closeModal();
         toast('Backup importado.');
       } catch {
+        sound('error');
         toast('Esse backup não é válido.');
       }
     };
@@ -2747,6 +2853,7 @@
   }
 
   async function showTaskNotification(task, date, minutesBefore) {
+    const customPlayed = await sound('notification');
     const recurrence = recurrenceLabel(task);
     const timing = minutesBefore > 0 ? `Em ${minutesBefore} min` : 'Agora';
     const tag = `task-${task.id}-${date}-${minutesBefore}`;
@@ -2756,6 +2863,7 @@
       badge: './assets/os-icon-v18-192.png',
       tag,
       renotify: false,
+      ...(customPlayed ? { silent: true } : {}),
       data: { taskId: task.id, date, minutesBefore, url: `./?date=${date}` }
     };
     try {
@@ -2853,7 +2961,7 @@
       return;
     }
     const card = event.target.closest('.task-card:not(.completed)');
-    if (!card || event.target.closest('button,input,select,a')) return;
+    if (!card || event.target.closest('button,input,select,a,details')) return;
     taskDrag = { node: card, startX: event.clientX, startY: event.clientY, dx: 0, horizontal: null };
   });
 
@@ -2951,6 +3059,7 @@
     if (!actionButton) return;
     const { action, id, date, projectId, rating } = actionButton.dataset;
     const actions = {
+      nutritionPlan: nutritionModal,
       addTask: () => taskModal(null, date || (state.view === 'upcoming' && state.plannerDate ? state.plannerDate : state.selectedDate), projectId || (state.view === 'upcoming' ? state.selectedProject : null)),
       addProject: () => projectModal(),
       addGoal: () => goalModal(),
@@ -3022,7 +3131,7 @@
   });
 
   $('#commandBtn').onclick = commandModal;
-  $('#settingsBtn').onclick = settingsModal;
+  $('#settingsBtn').onclick = () => { sound('open'); settingsModal(); };
   $('#quickAdd').onclick = () => {
     if (state.view === 'fluency') {
       fluencySourceModal();
@@ -3064,18 +3173,31 @@
   });
   window.addEventListener('focus', () => { syncSystemDay(); checkDueNotifications(); });
   window.addEventListener('pageshow', () => syncSystemDay());
+  window.addEventListener('objetivos:resources', () => {
+    Sounds?.setAssets(Resources?.sounds() || []);
+    if (Resources?.status() === 'idle' && $('.nutrition-modal')) closeModal();
+    render({ quiet: true });
+  });
   window.addEventListener('beforeunload', () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)));
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    const heardPush = new Set();
+    navigator.serviceWorker.addEventListener('message', async event => {
+      if (event.data?.type !== 'objetivos:push-sound' || event.source !== navigator.serviceWorker.controller) return;
+      const tag = String(event.data.tag || '');
+      const played = !heardPush.has(tag) && await sound('notification');
+      if (played) { heardPush.add(tag); if (heardPush.size > 100) heardPush.delete(heardPush.values().next().value); }
+      event.ports?.[0]?.postMessage({ played: Boolean(played) });
+    });
     let pwaReloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '35');
+      freshUrl.searchParams.set('build', '36');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=35').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=36').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {

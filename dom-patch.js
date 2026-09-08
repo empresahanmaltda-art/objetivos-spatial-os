@@ -15,6 +15,7 @@
     }
     const focused = current.ownerDocument.activeElement === current;
     const drawerOpen = current.id === 'completedDrawer' && current.classList.contains('open');
+    const detailsOpen = current.nodeName === 'DETAILS' && current.hasAttribute('data-preserve-open') ? current.open : null;
     for (const attr of [...current.attributes]) {
       if (!desired.hasAttribute(attr.name)) current.removeAttribute(attr.name);
     }
@@ -22,6 +23,7 @@
       if (current.getAttribute(attr.name) !== attr.value) current.setAttribute(attr.name, attr.value);
     }
     if (drawerOpen) current.classList.add('open');
+    if (detailsOpen !== null) current.open = detailsOpen;
     if (current.nodeName === 'INPUT' || current.nodeName === 'TEXTAREA') {
       if (!focused || desired.disabled) {
         if (current.value !== desired.value) current.value = desired.value;

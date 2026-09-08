@@ -174,6 +174,7 @@
     if (error) {
       setRuntimeStatus({ error: error.message || 'Falha ao carregar dados.' });
       setTopStatus('salvo neste aparelho');
+      if (owner === userId) window.ObjetivosResources?.load(runtime.client, userId);
       return;
     }
     const localState = api()?.getState?.();
@@ -181,6 +182,7 @@
       throw new Error('Não foi possível confirmar que esta conta é dona das aulas locais. Entre com a conta original; nenhum material foi enviado.');
     }
     localStorage.setItem(OWNER_KEY, userId);
+    window.ObjetivosResources?.load(runtime.client, userId);
     if (data?.payload && localStorage.getItem(DIRTY_KEY) !== '1' && !runtime.uploadPromise) {
       if (hashState(data.payload) !== runtime.lastHash) applyRemote(data.payload);
     }
@@ -418,6 +420,7 @@
         }, 0);
       }
       else {
+        window.ObjetivosResources?.clear();
         if (runtime.channel) runtime.client.removeChannel(runtime.channel);
         runtime.channel = null;
         clearTimeout(runtime.uploadTimer);
@@ -443,7 +446,9 @@
   window.OBJETIVOS_CLOUD = {
     bindSettings,
     signInWithGoogle,
-    uploadNow: () => uploadState(api()?.getState?.(), { force: true })
+    uploadNow: () => uploadState(api()?.getState?.(), { force: true }),
+    refreshResources: () => runtime.session && localStorage.getItem(OWNER_KEY) === runtime.session.user.id
+      ? window.ObjetivosResources?.load(runtime.client, runtime.session.user.id, { force: true }) : false
   };
   boot().catch((error) => {
     const message = error.message || 'Falha ao iniciar sincronização.';
