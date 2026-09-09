@@ -4,7 +4,7 @@
   let enabled = true, volume = .35, assignments = {}, generation = 0, ticket = 0, lastAt = 0;
   const events = {
     complete: 'Tarefa concluída', undo: 'Desfazer conclusão', create: 'Criar tarefa ou projeto',
-    navigate: 'Mudar de aba', notification: 'Notificação', error: 'Algo deu errado',
+    navigate: 'Mudar de aba', notification: 'Aviso com o app aberto', error: 'Algo deu errado',
     milestone: 'Meta alcançada', session: 'Revisão concluída', open: 'Abrir painel'
   };
   function stop() {
@@ -48,9 +48,12 @@
     })();
     decoding.set(asset.id, job); return job;
   }
-  function unlock() {
-    if (!prepare()) return;
-    if (context.state !== 'running') context.resume().catch(() => {});
+  async function unlock() {
+    if (!prepare()) return false;
+    try {
+      if (context.state !== 'running') await context.resume();
+      return context.state === 'running';
+    } catch { return false; }
   }
   async function play(event, { previewId = '' } = {}) {
     if (!enabled || !volume || document.visibilityState === 'hidden' || document.body.classList.contains('auth-locked')) return false;

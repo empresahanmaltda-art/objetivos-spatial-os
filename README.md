@@ -81,3 +81,7 @@ A sincronização ainda usa snapshots do estado inteiro: edição simultânea em
 - Configurações permitem ativar/desativar, ajustar volume, ouvir e escolher o efeito de cada evento. Web Audio só começa após interação; os efeitos não se sobrepõem e cedem lugar à voz de estudo. Erros de áudio não bloqueiam uma ação.
 - O Web Push avisa uma janela visível para tocar o efeito. A notificação só silencia o som padrão quando a janela confirma a reprodução. Com o app fechado ou sem áudio liberado, permanece o som do sistema. A API de notificações não aceita arquivo de som personalizado. Referências: [opções de notificação](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification) e [interação e controles de áudio](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Best_practices).
 - Os testes adicionais cobrem vínculo de refeições após edição, preservação do histórico e do DOM, cache por conta, saída durante carregamento, silêncio, troca dos efeitos e fallback de notificações. A conferência auditiva no iPhone depende do dispositivo.
+
+## Avisos no iPhone (build 37)
+
+A escolha de áudio aparece como “Aviso com o app aberto”, com a limitação do iOS ao lado dos controles. “Testar aviso com o app aberto” libera o áudio por um toque e exercita a reprodução de um aviso agendado; não envia um push remoto nem comprova a entrega com a tela bloqueada. A prévia aguarda a liberação do áudio e é cancelada se o painel fechar. Novas opções de áudio são importadas para a conta sem substituir as escolhas existentes.

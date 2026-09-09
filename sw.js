@@ -1,5 +1,5 @@
-const CACHE = 'objetivos-spatial-v36';
-const ASSETS = ['./', './index.html', './styles.css?v=36', './dom-patch.js?v=36', './fluency-engine.js?v=36', './personal-resources.js?v=36', './sound-engine.js?v=36', './app.js?v=36', './cloud-config.js?v=21', './cloud-sync.js?v=36', './manifest.webmanifest?v=21', './assets/os-icon-v18-180.png', './assets/os-icon-v18-192.png', './assets/os-icon-v18-512.png'];
+const CACHE = 'objetivos-spatial-v37';
+const ASSETS = ['./', './index.html', './styles.css?v=37', './dom-patch.js?v=37', './fluency-engine.js?v=37', './personal-resources.js?v=37', './sound-engine.js?v=37', './app.js?v=37', './cloud-config.js?v=21', './cloud-sync.js?v=37', './manifest.webmanifest?v=21', './assets/os-icon-v18-180.png', './assets/os-icon-v18-192.png', './assets/os-icon-v18-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

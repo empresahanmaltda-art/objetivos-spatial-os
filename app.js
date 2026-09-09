@@ -2583,6 +2583,9 @@
         </div>
         <div class="sound-settings">
           <label class="sound-volume" for="soundVolume"><span>Volume <output id="soundVolumeValue">${Math.round(Number(state.settings.soundVolume ?? .35)*100)}%</output></span><input id="soundVolume" type="range" min="0" max="100" value="${Math.round(Number(state.settings.soundVolume ?? .35)*100)}" /></label>
+          <p class="form-note"><strong>App aberto:</strong> o aviso pode tocar o som escolhido após um toque na tela.<br /><strong>App fechado ou iPhone bloqueado:</strong> toca o som do iOS. A seleção abaixo não altera esse som.</p>
+          <button class="soft-button" id="notificationSoundTestBtn" type="button">Testar aviso com o app aberto</button>
+          <p class="form-note" id="notificationSoundTestStatus" role="status"></p>
           <details><summary>Ouvir e escolher cada som</summary>
             <p class="form-note">Use ▶ para reconhecer os seus arquivos. Você pode trocar o som de qualquer ação.</p>
             ${Object.entries(Sounds?.events || {}).map(([key,label]) => {
@@ -2754,10 +2757,29 @@
     }; });
     $$('[data-preview-event]').forEach(button => { button.onclick = async () => {
       if (state.settings.soundEffects === false || !Number(state.settings.soundVolume)) { toast('Ative os sons e aumente o volume para ouvir.'); return; }
-      Sounds?.configure(state.settings); Sounds?.unlock();
-      const played = await Sounds?.play(button.dataset.previewEvent, { previewId: $(`#sound-${button.dataset.previewEvent}`).value });
+      const previewId = $(`#sound-${button.dataset.previewEvent}`).value;
+      Sounds?.configure(state.settings); await Sounds?.unlock();
+      if (!document.contains(button)) return;
+      const played = await Sounds?.play(button.dataset.previewEvent, { previewId });
       if (!played) toast('O áudio não iniciou. Toque novamente para ouvir.');
     }; });
+    $('#notificationSoundTestBtn').onclick = async event => {
+      const button = event.currentTarget;
+      const status = $('#notificationSoundTestStatus');
+      if (state.settings.soundEffects === false || !Number(state.settings.soundVolume)) { status.textContent = 'Ative os sons e aumente o volume para testar.'; return; }
+      button.disabled = true;
+      status.textContent = 'Preparando o aviso…';
+      Sounds?.configure(state.settings);
+      const unlocked = await Sounds?.unlock();
+      // Exercise the scheduled-notification path, after the real gesture unlock.
+      await new Promise(resolve => setTimeout(resolve, 300));
+      if (!document.contains(button)) return;
+      const played = unlocked && await sound('notification');
+      button.disabled = false;
+      status.textContent = played
+        ? 'Teste reproduzido pelo app. Se não ouviu, confira o volume de mídia e o modo silencioso do iPhone.'
+        : 'O áudio não ficou disponível. Pare a voz do estudo, mantenha o app aberto e toque para testar novamente.';
+    };
     $('#refreshResourcesBtn').onclick = async event => {
       const button = event.currentTarget; button.disabled = true;
       const success = await window.OBJETIVOS_CLOUD?.refreshResources?.();
@@ -3194,10 +3216,10 @@
       if (pwaReloading) return;
       pwaReloading = true;
       const freshUrl = new URL(location.href);
-      freshUrl.searchParams.set('build', '36');
+      freshUrl.searchParams.set('build', '37');
       location.replace(freshUrl.href);
     });
-    navigator.serviceWorker.register('./sw.js?v=36').then((registration) => registration.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=37').then((registration) => registration.update()).catch(() => {});
   }
 
   window.__OBJETIVOS__ = {

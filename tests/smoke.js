@@ -202,8 +202,8 @@ assert(indexSource.includes('id="appShell" aria-hidden="true" inert'), 'app must
 assert(!indexSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public page');
 assert(!swSource.includes('fluency-curriculum.js'), 'private curriculum leaked into the public cache');
 assert(gitignoreSource.split(/\r?\n/).includes('fluency-curriculum.js'), 'private curriculum must be ignored by Git');
-assert(indexSource.includes('fluency-engine.js?v=36'), 'Fluency engine missing from the public page');
-assert(swSource.includes("'./fluency-engine.js?v=36'"), 'Fluency engine must be available offline');
+assert(indexSource.includes('fluency-engine.js?v=37'), 'Fluency engine missing from the public page');
+assert(swSource.includes("'./fluency-engine.js?v=37'"), 'Fluency engine must be available offline');
 assert(appSource.includes("data-action=\"startFluencyQuick\""), 'class-day warmup control missing');
 assert(appSource.includes("startFluencyQuick: () => startFluencySession(10, 'warmup')"), 'class-day warmup must use a ten-minute plan');
 assert(appSource.includes("item.kind === 'warmup'"), 'completed warmups must not reappear later on class days');
@@ -464,13 +464,13 @@ assert(stylesSource.includes('width:calc(100vw - 20px);'), 'approved floating mo
 assert(!stylesSource.includes('height:calc(62px + env(safe-area-inset-bottom))'), 'safe area was incorrectly added inside the dock again');
 assert(stylesSource.includes('position:fixed;inset:0;\n  height:auto;min-height:0;'), 'the iOS viewport must extend behind the bottom safe area');
 assert(stylesSource.includes('padding:calc(10px + env(safe-area-inset-top)) 10px calc(82px + env(safe-area-inset-bottom))'), 'mobile content clearance for the floating dock is missing');
-assert(indexSource.includes('styles.css?v=36') && indexSource.includes('app.js?v=36') && indexSource.includes('cloud-sync.js?v=36'), 'v36 asset cache keys missing');
-assert(swSource.includes("objetivos-spatial-v36"), 'v36 service-worker cache missing');
+assert(indexSource.includes('styles.css?v=37') && indexSource.includes('app.js?v=37') && indexSource.includes('cloud-sync.js?v=37'), 'v37 asset cache keys missing');
+assert(swSource.includes("objetivos-spatial-v37"), 'v37 service-worker cache missing');
 assert(stylesSource.includes('opacity:.001;cursor:pointer'), 'native iOS pickers must remain tappable above their fixed visual shells');
 assert(appSource.includes('id="taskDateDisplay"') && appSource.includes('id="taskTimeDisplay"'), 'fixed date and time display shells missing');
 assert(appSource.includes("location.replace(freshUrl.href)"), 'PWA updates must force the newly installed build to become visible');
-assert(appSource.includes("freshUrl.searchParams.set('build', '36')"), 'PWA refresh must point to build 36');
-assert(appSource.includes("serviceWorker.register('./sw.js?v=36')"), 'PWA must register the build 36 service worker');
+assert(appSource.includes("freshUrl.searchParams.set('build', '37')"), 'PWA refresh must point to build 37');
+assert(appSource.includes("serviceWorker.register('./sw.js?v=37')"), 'PWA must register the build 37 service worker');
 assert(swSource.includes("fetch(event.request, { cache: 'no-store' })"), 'PWA navigation must bypass stale iOS caches');
 assert(appSource.includes("window.matchMedia?.('(max-width:760px)')"), 'mobile modal must not auto-open the keyboard');
 ['backgroundColor', 'glassColor', 'moduleColor', 'glowColor', 'glassOpacity', 'moduleOpacity', 'glassBlur'].forEach((id) => {
